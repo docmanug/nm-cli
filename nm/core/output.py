@@ -129,6 +129,99 @@ def format_item_created(item_type: str, item_id, item_name: str) -> str:
     return f"{item_type} cree : #{item_id} — {item_name}"
 
 
+def format_deals_list(deals: list, board_name: str = "") -> str:
+    if not deals:
+        return f"Aucun deal actif{' dans ' + board_name if board_name else ''}."
+    lines = [f"{len(deals)} deals{' dans ' + board_name if board_name else ''} :\n"]
+    for i, deal in enumerate(deals, 1):
+        arr = deal.get("arr", "?")
+        lines.append(
+            f"#{i} {deal['name']} | Stage: {deal.get('stage', 'N/A')} "
+            f"| ARR: {arr} EUR | Close: {deal.get('close_date', 'N/A')}"
+        )
+        owner = deal.get("owner", "")
+        if owner:
+            lines.append(f"   Owner: {owner}")
+    return "\n".join(lines)
+
+
+def format_deal_detail(deal: dict) -> str:
+    lines = [
+        f"{deal['name']}",
+        f"  Board: {deal.get('board', 'N/A')}",
+        f"  Stage: {deal.get('stage', 'N/A')}",
+        f"  Contract Status: {deal.get('contract_status', 'N/A')}",
+        f"  ARR: {deal.get('arr', 'N/A')} EUR",
+        f"  MRR: {deal.get('mrr', 'N/A')} EUR",
+        f"  TCV: {deal.get('tcv', 'N/A')} EUR",
+        f"  Terms: {deal.get('terms', 'N/A')} mois",
+        f"  Close Date: {deal.get('close_date', 'N/A')}",
+        f"  Contract End: {deal.get('contract_end_date', 'N/A')}",
+        f"  Payment Date: {deal.get('payment_date', 'N/A')}",
+        f"  Owner: {deal.get('owner', 'N/A')}",
+        f"  Company: {deal.get('company', 'N/A')}",
+    ]
+    notes = deal.get("notes", [])
+    if notes:
+        lines.append("  Notes:")
+        for note in notes:
+            lines.append(f"    - {note}")
+    return "\n".join(lines)
+
+
+def format_pipeline_summary(stages: dict, board_name: str = "",
+                            total_arr: float = 0, total_deals: int = 0) -> str:
+    lines = [f"Pipeline {board_name} — {total_deals} deals | ARR total: {total_arr:.0f} EUR\n"]
+    for stage, data in stages.items():
+        lines.append(
+            f"  {stage}: {data['count']} deals | ARR: {data['arr']:.0f} EUR"
+        )
+    return "\n".join(lines)
+
+
+def format_company_detail(company: dict) -> str:
+    lines = [
+        f"{company['name']}",
+        f"  Statut: {company.get('status', 'N/A')}",
+        f"  Tel: {company.get('phone', 'N/A')}",
+        f"  Ville: {company.get('city', 'N/A')}",
+        f"  Pays: {company.get('country', 'N/A')}",
+        f"  CS: {company.get('cs', 'N/A')}",
+        f"  SA matching: {company.get('superadmin_matching', 'N/A')}",
+    ]
+    contacts = company.get("contacts", [])
+    if contacts:
+        lines.append(f"  Contacts: {', '.join(contacts)}")
+    return "\n".join(lines)
+
+
+def format_meetings_list(meetings: list) -> str:
+    if not meetings:
+        return "Aucun meeting."
+    lines = [f"{len(meetings)} meetings :\n"]
+    for i, m in enumerate(meetings, 1):
+        lines.append(
+            f"#{i} {m.get('title', m.get('name', '?'))} | {m.get('date', '?')} "
+            f"| {m.get('type', '?')} | Statut: {m.get('status', '?')}"
+        )
+        people = m.get("people", "")
+        if people:
+            lines.append(f"   Avec: {people}")
+    return "\n".join(lines)
+
+
+def format_calls_list_detailed(calls: list) -> str:
+    if not calls:
+        return "Aucun appel."
+    lines = [f"{len(calls)} appels :\n"]
+    for i, call in enumerate(calls, 1):
+        lines.append(
+            f"#{i} {call.get('name', '?')} | {call.get('date', '?')} "
+            f"| Outcome: {call.get('outcome', '?')} | Duree: {call.get('duration', '?')} min"
+        )
+    return "\n".join(lines)
+
+
 def format_contact(contact: dict) -> str:
     lines = [
         f"{contact.get('name', 'N/A')}",
