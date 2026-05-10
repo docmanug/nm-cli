@@ -8,9 +8,19 @@ MONDAY_API_URL = "https://api.monday.com/v2"
 
 
 class MondayService:
-    def __init__(self, api_token: str, board_id: int | None = None):
+    # Default column map (overridden by profile config)
+    DEFAULT_COLUMNS = {
+        "status": "status",
+        "phone": "phone",
+        "email": "email",
+        "company": "company",
+        "last_contact": "last_contact",
+    }
+
+    def __init__(self, api_token: str, board_id: int | None = None, column_map: dict | None = None):
         self._token = api_token
         self._board_id = board_id
+        self._col = {**self.DEFAULT_COLUMNS, **(column_map or {})}
         self._headers = {
             "Authorization": api_token,
             "Content-Type": "application/json",
@@ -44,24 +54,24 @@ class MondayService:
 
         leads = []
         today = date.today()
+        last_contact_col = self._col["last_contact"]
         for item in items:
             cols = self._parse_columns(item["column_values"])
             days = "?"
-            for key in cols:
-                if "date" in key and cols[key]:
-                    try:
-                        d = datetime.strptime(cols[key], "%Y-%m-%d").date()
-                        days = (today - d).days
-                    except ValueError:
-                        pass
-                    break
+            lc = cols.get(last_contact_col, "")
+            if lc:
+                try:
+                    d = datetime.strptime(lc, "%Y-%m-%d").date()
+                    days = (today - d).days
+                except ValueError:
+                    pass
             leads.append({
                 "id": item["id"],
                 "name": item["name"],
-                "status": cols.get("status", "N/A"),
+                "status": cols.get(self._col["status"], "N/A"),
                 "days": days,
-                "phone": cols.get("phone", "N/A"),
-                "last_contact": cols.get("last_contact"),
+                "phone": cols.get(self._col["phone"], "N/A"),
+                "last_contact": lc or None,
             })
         return format_leads_list(leads)
 
@@ -78,16 +88,16 @@ class MondayService:
         lead = {
             "id": item["id"],
             "name": item["name"],
-            "status": cols.get("status", "N/A"),
-            "phone": cols.get("phone", "N/A"),
-            "email": cols.get("email", "N/A"),
-            "company": cols.get("company", "N/A"),
+            "status": cols.get(self._col["status"], "N/A"),
+            "phone": cols.get(self._col["phone"], "N/A"),
+            "email": cols.get(self._col["email"], "N/A"),
+            "company": cols.get(self._col["company"], "N/A"),
             "notes": [u["text_body"] for u in item.get("updates", [])],
         }
         return format_lead_detail(lead)
 
     def leads_update(self, item_id: str, status: str) -> str:
-        status_column_id = "status"
+        status_column_id = self._col["status"]
         value = json.dumps({"label": status})
         self._query(
             'mutation { change_column_value(board_id: %d, item_id: %s, column_id: "%s", value: %s) { id } }'
@@ -113,7 +123,8 @@ def handle_monday(command: str, args: list, profile) -> str:
     boards = config.get("boards", [])
     board_id = boards[0] if boards else None
 
-    svc = MondayService(api_token=creds["api_token"], board_id=board_id)
+    column_map = config.get("column_map", {})
+    svc = MondayService(api_token=creds["api_token"], board_id=board_id, column_map=column_map)
 
     if command == "leads.list":
         return svc.leads_list()

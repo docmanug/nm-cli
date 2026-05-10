@@ -3,20 +3,32 @@ description: Hermes SDR — prospection Nextmotion
 
 services:
   monday:
-    boards: []
+    boards: [8379500363]
     commands:
       - leads.list
       - leads.get
       - leads.update
       - leads.note
       - leads.next-actions
+    column_map:
+      status: lead_status
+      phone: lead_phone
+      email: lead_email
+      company: lead_company
+      last_contact: date_mkqz4d3e
+      first_name: first_name
+      last_name: last_name
     allowed_statuses:
-      - Demo booked
-      - Nurturing
-      - No answer
-      - Contacted
-      - Won
-      - Lost
+      - New
+      - MQL
+      - Working
+      - Sequence
+      - No response
+      - Patient
+      - not interested - budget
+      - not interested - competitor
+      - not interested - no answer
+      - Non pertinent (pas d'esthetique)
 
   nextcall:
     commands:
