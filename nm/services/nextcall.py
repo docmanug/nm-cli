@@ -572,12 +572,26 @@ def handle_nextcall(command: str, args: list, profile) -> str:
 
     svc = NextCallService(api_key=creds["api_key"], api_url=creds["api_url"], user_id=creds["user_id"])
     tracker = LimitTracker()
+    user_ids_map = config.get("user_ids", {})
 
     def get_flag(flag: str) -> str | None:
         for i, a in enumerate(args):
             if a == f"--{flag}" and i + 1 < len(args):
                 return args[i + 1]
         return None
+
+    def resolve_user(raw: str | None) -> str | None:
+        """Resolve user name (e.g. 'theo') to NextCall UUID."""
+        if not raw:
+            return None
+        # Check if it's already a UUID
+        if len(raw) > 20 and "-" in raw:
+            return raw
+        # Look up in user_ids map from profile
+        resolved = user_ids_map.get(raw.lower())
+        if resolved:
+            return resolved
+        return raw
 
     if command == "contact.get":
         if not args:
@@ -590,7 +604,7 @@ def handle_nextcall(command: str, args: list, profile) -> str:
 
     # --- CALLS (read-only) ---
     elif command == "calls.list":
-        user_id = get_flag("user") or creds.get("user_id")
+        user_id = resolve_user(get_flag("user")) or creds.get("user_id")
         date_from = get_flag("from")
         date_to = get_flag("to")
         days_str = get_flag("days")
@@ -604,14 +618,14 @@ def handle_nextcall(command: str, args: list, profile) -> str:
         return svc.calls_get(args[0], include_coaching=coaching)
 
     elif command == "calls.stats":
-        user_id = get_flag("user") or creds.get("user_id")
+        user_id = resolve_user(get_flag("user")) or creds.get("user_id")
         days_str = get_flag("days")
         days = int(days_str) if days_str else None
         return svc.calls_stats(user_id, get_flag("from"), get_flag("to"), days)
 
     # --- MEETING TRANSCRIPTS (read-only) ---
     elif command == "transcripts.list":
-        user_id = get_flag("user")
+        user_id = resolve_user(get_flag("user"))
         days_str = get_flag("days")
         days = int(days_str) if days_str else None
         return svc.meeting_transcripts_list(user_id, get_flag("from"), get_flag("to"), days)
@@ -624,12 +638,12 @@ def handle_nextcall(command: str, args: list, profile) -> str:
     elif command == "transcripts.recent":
         contact_id = get_flag("contact")
         contact_email = get_flag("email")
-        user_id = get_flag("user")
+        user_id = resolve_user(get_flag("user"))
         return svc.meeting_transcripts_recent(contact_id, contact_email, user_id)
 
     # --- SMS (read-only) ---
     elif command == "sms.list":
-        user_id = get_flag("user")
+        user_id = resolve_user(get_flag("user"))
         contact_id = get_flag("contact")
         days_str = get_flag("days")
         days = int(days_str) if days_str else None
@@ -637,7 +651,7 @@ def handle_nextcall(command: str, args: list, profile) -> str:
 
     # --- WHATSAPP (read-only) ---
     elif command == "whatsapp.list":
-        user_id = get_flag("user")
+        user_id = resolve_user(get_flag("user"))
         contact_id = get_flag("contact")
         days_str = get_flag("days")
         days = int(days_str) if days_str else None
@@ -645,7 +659,7 @@ def handle_nextcall(command: str, args: list, profile) -> str:
 
     # --- GMAIL (read-only) ---
     elif command == "gmail.list":
-        user_id = get_flag("user") or creds.get("user_id")
+        user_id = resolve_user(get_flag("user")) or creds.get("user_id")
         contact_email = get_flag("email")
         max_str = get_flag("max")
         max_results = int(max_str) if max_str else 10
@@ -654,12 +668,12 @@ def handle_nextcall(command: str, args: list, profile) -> str:
     elif command == "gmail.get":
         if not args:
             return format_error("Usage: nm nextcall gmail get <message_id> [--user <id>]")
-        user_id = get_flag("user") or creds.get("user_id")
+        user_id = resolve_user(get_flag("user")) or creds.get("user_id")
         return svc.gmail_get(user_id, args[0])
 
     # --- TEAM (read-only) ---
     elif command == "team.get":
-        user_id = get_flag("user") or (args[0] if args else creds.get("user_id"))
+        user_id = resolve_user(get_flag("user") or (args[0] if args else None)) or creds.get("user_id")
         metrics_date = get_flag("date")
         return svc.team_get(user_id, metrics_date)
 
@@ -668,16 +682,16 @@ def handle_nextcall(command: str, args: list, profile) -> str:
 
     # --- NOTIFICATIONS (read-only) ---
     elif command == "notifications.get":
-        user_id = get_flag("user")
+        user_id = resolve_user(get_flag("user"))
         return svc.notifications_get(user_id)
 
     elif command == "messages.unread":
-        user_id = get_flag("user")
+        user_id = resolve_user(get_flag("user"))
         return svc.messages_unread(user_id)
 
     # --- CALENDAR EVENTS (read-only) ---
     elif command == "calendar.events":
-        user_id = get_flag("user") or creds.get("user_id")
+        user_id = resolve_user(get_flag("user")) or creds.get("user_id")
         date_str = get_flag("date")
         days_str = get_flag("days")
         days = int(days_str) if days_str else None

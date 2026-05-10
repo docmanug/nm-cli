@@ -181,3 +181,11 @@ services:
       # Coaching IA
       - coach.tips
     # Pas de send, pas de calendar.book — Logan supervise, il n'execute pas
+    # UUIDs NextCall (necessaires pour gmail, team, calendar — different des IDs Monday)
+    user_ids:
+      theo: 242ca4d7-37ef-487a-aaf0-83e06a936a29
+      juliette: 4d88b171-ad39-42aa-be82-ee867c90bfb2
+      loan: a1ae3ceb-1e18-4b9d-ac99-b13bcc7d8e94
+      emmanuel: a6178af6-2e87-4a97-9315-d95aa3eb4231
+      santiago: 8c53bb5c-01f6-4707-8da9-09a496f2976d
+      sophie: 8a347333-5a65-4e38-8fb5-ec17b8ab1cf4
