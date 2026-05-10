@@ -86,3 +86,8 @@ def main(ctx, args):
     except Exception as e:
         click.echo(f"Error: {e}", err=True)
         sys.exit(1)
+
+
+# Register services
+from nm.services.monday import handle_monday
+register_service("monday", handle_monday)
