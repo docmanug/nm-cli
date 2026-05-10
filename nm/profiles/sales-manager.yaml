@@ -1,0 +1,155 @@
+name: sales-manager
+description: Logan Sales Manager — supervision pipeline Nextmotion
+
+services:
+  monday:
+    boards:
+      abonnements: 8379500369
+      renewal: 9299481671
+      machine: 9299534048
+      companies: 8379500364
+      contacts: 8379500370
+      fr_leads: 8379500363
+      calls: 9188247163
+      meetings: 8793493881
+
+    commands:
+      # Deals (read-only)
+      - deals.list
+      - deals.get
+      - deals.pipeline
+      # Companies (read-only)
+      - companies.get
+      # Leads (read-only)
+      - leads.list
+      - leads.get
+      # Calls (read-only)
+      - calls.list
+      - calls.get
+      # Meetings (read-only)
+      - meetings.list
+
+    column_maps:
+      abonnements:
+        deal_stage: deal_abon20_pipeline
+        contract_status: color_mkrtrwcy
+        deal_arr: deal_arr_fina
+        deal_mrr: deal_mrrfi
+        deal_tcv: deal_tcv_fina
+        close_date: deal_close_date
+        contract_end_date: contract_end_date
+        payment_date: payment_date
+        terms: contract_terms
+        company: board_relation_mkpfb3a2
+        contacts: deal_contacts
+        deal_owner: deal_owner
+        cs: deal_cus_succ
+        churned: color_mkqwdnsx
+        source: color_mkvqc311
+        upfront: color_mkr2fy4c
+
+      renewal:
+        deal_stage: deal_renew_pipeline
+        contract_status: color_mkrt9g56
+        deal_arr: deal_arr_fina
+        deal_mrr: deal_mrrfi
+        deal_tcv: deal_tcv_fina
+        renewal_date: deal_close_date
+        contract_end_date: contract_end_date
+        payment_date: payment_date
+        terms: contract_terms
+        previous_deal: board_relation_mkrk7vr1
+        next_deal: board_relation_mksfdmmt
+        company: board_relation_mkpfb3a2
+        contacts: deal_contacts
+        deal_owner: deal_owner
+        cs: deal_cus_succ
+        churned: color_mkqwdnsx
+        upfront: color_mkr2fy4c
+
+      machine:
+        deal_stage: deal_mach_pipeline
+        deal_arr: deal_arr_fina
+        deal_tcv: deal_tcv_fina
+        deal_mrr: deal_mrrfi
+        close_date: deal_close_date
+        payment_date: payment_date
+        terms: contract_terms
+        company: board_relation_mkpfb3a2
+        contacts: deal_contacts
+        churned: color_mkqwdnsx
+
+      companies:
+        status: nm_lead_status
+        contacts: board_relation_mkqa18k1
+        company_owner: board_relation_mkpextmr
+        cs: customer_success
+        phone: phone_mkq9hsqa
+        address: address
+        zip: zip
+        city: city
+        country: pays
+        timezone: timezone
+        language: preferred_language
+        superadmin_matching: color_mm1eb4pd
+
+      contacts:
+        status: nm_lead_status
+        company: board_relation_mkqagmb0
+        email: contact_email
+        first_name: first_name
+        last_name: last_name
+        phone: contact_mobile
+        role: contact_role
+        cs: customer_success
+        superadmin_matching: color_mkyef1wt
+
+      fr_leads:
+        status: lead_status
+        phone: lead_phone
+        email: lead_email
+        company: lead_company
+        first_name: first_name
+        last_name: last_name
+        last_call_date: date_mkqz4d3e
+        nb_tentatives: numeric_mm11gt66
+        outcome_dernier_call: color_mm0rt6dn
+        resume_ia_call: long_text_mm0r85y
+        lead_score_ia: numeric_mm0rbmx5
+
+      calls:
+        date: date_mkrj5yc4
+        heure: hour_mky7pk8f
+        duree: numeric_mkxj8z9w
+        sdr: multiple_person_mkr5rvzh
+        call_type: color_mkrtqmws
+        call_outcome: color_mkr96e32
+        linked_contact: board_relation_mm1sfp9n
+        phone: phone_mkywmge9
+        transcript_ia: text_mkr977fk
+        note_globale: text_mkrh25qc
+        feedback_global: long_text_mkrh69e0
+
+      meetings:
+        people: person
+        status: color_mkpe8p71
+        type: color_mkpeqpqt
+        contacts_relation: board_relation_mkpe7v7q
+        companies_relation: board_relation_mkzf5p36
+        titre: text_mkxjz6wy
+        start_date: date_mkpefnz4
+        end_date: date_mkpeav6m
+        duree: numeric_mkxjd0e1
+
+    people_ids:
+      theo: 70103039
+      emmanuel: 3299630
+      santiago: 43763993
+      yasmina: 37456201
+      sophie: 103430792
+
+  nextcall:
+    commands:
+      - contact.get
+      - contact.history
+    # Pas de send, pas de calendar.book — Logan supervise, il n'execute pas
