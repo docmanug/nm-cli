@@ -1,0 +1,42 @@
+name: sdr
+description: Hermes SDR — prospection Nextmotion
+
+services:
+  monday:
+    boards: []
+    commands:
+      - leads.list
+      - leads.get
+      - leads.update
+      - leads.note
+      - leads.next-actions
+    allowed_statuses:
+      - Demo booked
+      - Nurturing
+      - No answer
+      - Contacted
+      - Won
+      - Lost
+
+  nextcall:
+    commands:
+      - contact.get
+      - contact.history
+      - send.whatsapp
+      - send.sms
+      - send.email
+      - calendar.check
+      - calendar.book
+    limits:
+      whatsapp: 20
+      sms: 10
+      emails: 15
+    max_message_length: 500
+
+  elevenlabs:
+    commands:
+      - call.trigger
+      - call.result
+      - call.list-today
+    limits:
+      calls: 10
