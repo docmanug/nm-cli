@@ -158,4 +158,8 @@ services:
       - transcripts.list
       - transcripts.get
       - transcripts.recent
+      - sms.list
+      - whatsapp.list
+      - gmail.list
+      - gmail.get
     # Pas de send, pas de calendar.book — Logan supervise, il n'execute pas

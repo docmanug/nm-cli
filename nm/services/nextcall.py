@@ -220,6 +220,109 @@ class NextCallService:
             })
         return format_meeting_transcripts_list(items)
 
+    # --- SMS (read-only) ---
+
+    def sms_list(self, user_id: str | None = None,
+                 contact_id: str | None = None,
+                 date_from: str | None = None,
+                 date_to: str | None = None,
+                 days: int | None = None) -> str:
+        params = {}
+        if user_id:
+            params["userId"] = user_id
+        if contact_id:
+            params["contactId"] = contact_id
+        if days and not date_from:
+            from datetime import date, timedelta
+            date_from = (date.today() - timedelta(days=days)).isoformat()
+            date_to = date.today().isoformat()
+        if date_from:
+            params["dateFrom"] = date_from
+        if date_to:
+            params["dateTo"] = date_to
+        result = self._call_tool("sms_list", params)
+        messages = result if isinstance(result, list) else result.get("messages", [])
+        if not messages:
+            return "Aucun SMS."
+        lines = [f"{len(messages)} SMS :\n"]
+        for i, m in enumerate(messages, 1):
+            direction = m.get("direction", "?")
+            body = (m.get("body", "") or "")[:100]
+            dt = (m.get("date", m.get("createdAt", "?"))[:16]
+                  if m.get("date", m.get("createdAt")) else "?")
+            contact = m.get("contactName", m.get("contact", {}).get("name", m.get("contactId", "?")))
+            lines.append(f"#{i} [{dt}] {direction} {contact}: {body}")
+        return "\n".join(lines)
+
+    # --- WHATSAPP (read-only) ---
+
+    def whatsapp_list(self, user_id: str | None = None,
+                      contact_id: str | None = None,
+                      date_from: str | None = None,
+                      date_to: str | None = None,
+                      days: int | None = None) -> str:
+        params = {}
+        if user_id:
+            params["userId"] = user_id
+        if contact_id:
+            params["contactId"] = contact_id
+        if days and not date_from:
+            from datetime import date, timedelta
+            date_from = (date.today() - timedelta(days=days)).isoformat()
+            date_to = date.today().isoformat()
+        if date_from:
+            params["dateFrom"] = date_from
+        if date_to:
+            params["dateTo"] = date_to
+        result = self._call_tool("whatsapp_list", params)
+        messages = result if isinstance(result, list) else result.get("messages", [])
+        if not messages:
+            return "Aucun message WhatsApp."
+        lines = [f"{len(messages)} messages WhatsApp :\n"]
+        for i, m in enumerate(messages, 1):
+            direction = m.get("direction", "?")
+            body = (m.get("body", "") or "")[:100]
+            dt = (m.get("date", m.get("createdAt", "?"))[:16]
+                  if m.get("date", m.get("createdAt")) else "?")
+            contact = m.get("contactName", m.get("contact", {}).get("name", m.get("contactId", "?")))
+            lines.append(f"#{i} [{dt}] {direction} {contact}: {body}")
+        return "\n".join(lines)
+
+    # --- GMAIL (read-only) ---
+
+    def gmail_list(self, user_id: str, contact_email: str | None = None,
+                   max_results: int = 10) -> str:
+        params = {"userId": user_id}
+        if contact_email:
+            params["contactEmail"] = contact_email
+        if max_results:
+            params["maxResults"] = max_results
+        result = self._call_tool("gmail_list", params)
+        emails = result if isinstance(result, list) else result.get("emails", result.get("messages", []))
+        if not emails:
+            return "Aucun email."
+        lines = [f"{len(emails)} emails :\n"]
+        for i, e in enumerate(emails, 1):
+            subject = e.get("subject", "(sans objet)")
+            sender = e.get("from", e.get("sender", "?"))
+            dt = (e.get("date", e.get("receivedAt", "?"))[:16]
+                  if e.get("date", e.get("receivedAt")) else "?")
+            lines.append(f"#{i} [{dt}] {sender}: {subject}")
+        return "\n".join(lines)
+
+    def gmail_get(self, user_id: str, message_id: str) -> str:
+        result = self._call_tool("gmail_get", {"userId": user_id, "messageId": message_id})
+        e = result if isinstance(result, dict) else {}
+        lines = [
+            f"Email #{e.get('id', message_id)}",
+            f"  De: {e.get('from', e.get('sender', 'N/A'))}",
+            f"  A: {e.get('to', 'N/A')}",
+            f"  Date: {e.get('date', 'N/A')}",
+            f"  Objet: {e.get('subject', 'N/A')}",
+            f"  Corps:\n    {(e.get('body', e.get('text', '')) or '')[:3000]}",
+        ]
+        return "\n".join(lines)
+
     def calendar_check(self, date_str: str) -> str:
         result = self._call_tool("calendar_freebusy", {
             "userId": self._user_id,
@@ -321,6 +424,36 @@ def handle_nextcall(command: str, args: list, profile) -> str:
         contact_email = get_flag("email")
         user_id = get_flag("user")
         return svc.meeting_transcripts_recent(contact_id, contact_email, user_id)
+
+    # --- SMS (read-only) ---
+    elif command == "sms.list":
+        user_id = get_flag("user")
+        contact_id = get_flag("contact")
+        days_str = get_flag("days")
+        days = int(days_str) if days_str else None
+        return svc.sms_list(user_id, contact_id, get_flag("from"), get_flag("to"), days)
+
+    # --- WHATSAPP (read-only) ---
+    elif command == "whatsapp.list":
+        user_id = get_flag("user")
+        contact_id = get_flag("contact")
+        days_str = get_flag("days")
+        days = int(days_str) if days_str else None
+        return svc.whatsapp_list(user_id, contact_id, get_flag("from"), get_flag("to"), days)
+
+    # --- GMAIL (read-only) ---
+    elif command == "gmail.list":
+        user_id = get_flag("user") or creds.get("user_id")
+        contact_email = get_flag("email")
+        max_str = get_flag("max")
+        max_results = int(max_str) if max_str else 10
+        return svc.gmail_list(user_id, contact_email, max_results)
+
+    elif command == "gmail.get":
+        if not args:
+            return format_error("Usage: nm nextcall gmail get <message_id> [--user <id>]")
+        user_id = get_flag("user") or creds.get("user_id")
+        return svc.gmail_get(user_id, args[0])
     elif command == "send.whatsapp":
         limit = profile.get_limit("nextcall", "whatsapp")
         if not tracker.check_and_increment("whatsapp", limit):
