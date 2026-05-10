@@ -94,3 +94,6 @@ register_service("monday", handle_monday)
 
 from nm.services.nextcall import handle_nextcall
 register_service("nextcall", handle_nextcall)
+
+from nm.services.elevenlabs import handle_elevenlabs
+register_service("elevenlabs", handle_elevenlabs)
