@@ -25,6 +25,7 @@ class ElevenLabsService:
             "prospect_name": prospect_name or "Inconnu",
             "call_type": call_type,
             "hook_type": hook_type,
+            "phone": phone,
         }
         if context:
             dyn_vars["context"] = context
