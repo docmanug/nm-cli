@@ -199,10 +199,6 @@ services:
       - send.email
       - calendar.check
       - calendar.book
-    limits:
-      whatsapp: 20
-      sms: 10
-      emails: 15
     max_message_length: 500
 
   elevenlabs:
@@ -210,5 +206,3 @@ services:
       - call.trigger
       - call.result
       - call.list-today
-    limits:
-      calls: 10
