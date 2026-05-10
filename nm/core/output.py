@@ -222,6 +222,94 @@ def format_calls_list_detailed(calls: list) -> str:
     return "\n".join(lines)
 
 
+def format_nextcall_calls_list(calls: list, period: str = "") -> str:
+    if not calls:
+        return f"Aucun appel{' ' + period if period else ''}."
+    lines = [f"{len(calls)} appels{' ' + period if period else ''} :\n"]
+    for i, call in enumerate(calls, 1):
+        duration = call.get("duration", "?")
+        if isinstance(duration, (int, float)) and duration > 0:
+            mins = int(duration) // 60
+            secs = int(duration) % 60
+            duration = f"{mins}m{secs:02d}s"
+        lines.append(
+            f"#{i} [{call.get('date', '?')}] {call.get('contact', '?')} "
+            f"| {call.get('status', '?')} | {call.get('label', '')} "
+            f"| {duration}"
+        )
+    return "\n".join(lines)
+
+
+def format_nextcall_call_detail(call: dict) -> str:
+    lines = [
+        f"Appel #{call.get('id', '?')}",
+        f"  Contact: {call.get('contact', 'N/A')}",
+        f"  Date: {call.get('date', 'N/A')}",
+        f"  Statut: {call.get('status', 'N/A')}",
+        f"  Label: {call.get('label', 'N/A')}",
+        f"  Duree: {call.get('duration', 'N/A')}s",
+        f"  Direction: {call.get('direction', 'N/A')}",
+    ]
+    transcript = call.get("transcript", "")
+    if transcript:
+        lines.append(f"  Transcript:\n    {transcript[:2000]}")
+    summary = call.get("summary", "")
+    if summary:
+        lines.append(f"  Resume IA: {summary}")
+    coaching = call.get("coaching_tips", [])
+    if coaching:
+        lines.append("  Coaching:")
+        for tip in coaching[:5]:
+            lines.append(f"    - {tip}")
+    return "\n".join(lines)
+
+
+def format_nextcall_call_stats(stats: dict) -> str:
+    lines = [
+        f"Stats appels :",
+        f"  Total: {stats.get('total', 0)}",
+        f"  Connectes: {stats.get('connected', 0)}",
+        f"  Pas repondu: {stats.get('no_answer', 0)}",
+        f"  Duree moyenne: {stats.get('avg_duration', 0):.0f}s",
+        f"  Duree totale: {stats.get('total_duration', 0):.0f}s",
+    ]
+    by_label = stats.get("by_label", {})
+    if by_label:
+        lines.append("  Par label:")
+        for label, count in by_label.items():
+            lines.append(f"    {label}: {count}")
+    return "\n".join(lines)
+
+
+def format_meeting_transcript(transcript: dict) -> str:
+    lines = [
+        f"Transcript #{transcript.get('id', '?')}",
+        f"  Titre: {transcript.get('title', 'N/A')}",
+        f"  Date: {transcript.get('date', 'N/A')}",
+        f"  Participants: {', '.join(transcript.get('participants', []))}",
+        f"  Statut: {transcript.get('status', 'N/A')}",
+    ]
+    summary = transcript.get("summary", "")
+    if summary:
+        lines.append(f"  Resume: {summary}")
+    text = transcript.get("transcript", "")
+    if text:
+        lines.append(f"  Transcript:\n    {text[:3000]}")
+    return "\n".join(lines)
+
+
+def format_meeting_transcripts_list(transcripts: list) -> str:
+    if not transcripts:
+        return "Aucun transcript."
+    lines = [f"{len(transcripts)} transcripts :\n"]
+    for i, t in enumerate(transcripts, 1):
+        lines.append(
+            f"#{i} [{t.get('date', '?')}] {t.get('title', '?')} "
+            f"| {t.get('status', '?')} | {t.get('duration', '?')}min"
+        )
+    return "\n".join(lines)
+
+
 def format_contact(contact: dict) -> str:
     lines = [
         f"{contact.get('name', 'N/A')}",
