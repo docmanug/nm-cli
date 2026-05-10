@@ -52,8 +52,15 @@ services:
         lead_score_ia: numeric_mm0rbmx5
         next_step: long_text_mkqytkhj
         next_step_date: date_mkqyjymk
+        booking_probability: color_mm0r1bdk
+        pain_intensity: color_mm0rajs0
+        digitalisation: color_mm0r2dea
+        rdv_intention: color_mm0r9ad2
+        timing_projet: color_mm0rrevg
+        budget_potentiel: color_mm0rj9yt
         call_priority: numeric_mm11ggfz
         next_call_due: date_mm11n6fr
+        sequence_start_date: date_mm1187td
 
       contacts:
         status: nm_lead_status
@@ -160,6 +167,12 @@ services:
         - No response
         - Paused
         - Converted
+      outcome_dernier_call:
+        - Rappel demandé
+        - RDV obtenu
+        - Mauvais contact
+        - Refus poli
+        - Pas joignable
       calls_outcome:
         - Connecte
         - RDV pris
