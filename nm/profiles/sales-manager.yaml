@@ -150,16 +150,31 @@ services:
 
   nextcall:
     commands:
+      # Contacts
       - contact.get
       - contact.history
+      # Calls
       - calls.list
       - calls.get
       - calls.stats
+      # Transcripts meetings
       - transcripts.list
       - transcripts.get
       - transcripts.recent
+      # Messaging (lecture seule)
       - sms.list
       - whatsapp.list
       - gmail.list
       - gmail.get
+      # Team
+      - team.get
+      - team.list
+      # Notifications
+      - notifications.get
+      - messages.unread
+      # Calendar (lecture seule)
+      - calendar.events
+      - calendar.check
+      # Coaching IA
+      - coach.tips
     # Pas de send, pas de calendar.book — Logan supervise, il n'execute pas

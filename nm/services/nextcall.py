@@ -1,4 +1,5 @@
 from __future__ import annotations
+from datetime import date, datetime, timedelta
 import requests
 from nm.core.output import (
     format_contact,
@@ -91,7 +92,7 @@ class NextCallService:
         if user_id:
             params["userId"] = user_id
         if days and not date_from:
-            from datetime import date, timedelta
+
             date_from = (date.today() - timedelta(days=days)).isoformat()
             date_to = date.today().isoformat()
         if date_from:
@@ -144,7 +145,7 @@ class NextCallService:
         if user_id:
             params["userId"] = user_id
         if days and not date_from:
-            from datetime import date, timedelta
+
             date_from = (date.today() - timedelta(days=days)).isoformat()
             date_to = date.today().isoformat()
         if date_from:
@@ -164,7 +165,7 @@ class NextCallService:
         if user_id:
             params["userId"] = user_id
         if days and not date_from:
-            from datetime import date, timedelta
+
             date_from = (date.today() - timedelta(days=days)).isoformat()
             date_to = date.today().isoformat()
         if date_from:
@@ -233,7 +234,7 @@ class NextCallService:
         if contact_id:
             params["contactId"] = contact_id
         if days and not date_from:
-            from datetime import date, timedelta
+
             date_from = (date.today() - timedelta(days=days)).isoformat()
             date_to = date.today().isoformat()
         if date_from:
@@ -267,7 +268,7 @@ class NextCallService:
         if contact_id:
             params["contactId"] = contact_id
         if days and not date_from:
-            from datetime import date, timedelta
+
             date_from = (date.today() - timedelta(days=days)).isoformat()
             date_to = date.today().isoformat()
         if date_from:
@@ -321,6 +322,131 @@ class NextCallService:
             f"  Objet: {e.get('subject', 'N/A')}",
             f"  Corps:\n    {(e.get('body', e.get('text', '')) or '')[:3000]}",
         ]
+        return "\n".join(lines)
+
+    # --- TEAM (read-only) ---
+
+    def team_get(self, user_id: str, metrics_date: str | None = None) -> str:
+        params = {"userId": user_id}
+        if metrics_date:
+            params["metricsDate"] = metrics_date
+        result = self._call_tool("team_get", params)
+        t = result if isinstance(result, dict) else {}
+        metrics = t.get("metrics", t)
+        lines = [
+            f"Profil {t.get('name', t.get('email', user_id))}",
+            f"  Statut: {'En ligne' if t.get('online') else 'Hors ligne'}",
+            f"  Appels: {metrics.get('calls', metrics.get('totalCalls', 0))}",
+            f"  Connectes: {metrics.get('connected', metrics.get('connectedCalls', 0))}",
+            f"  RDV pris: {metrics.get('meetings', metrics.get('meetingsBooked', 0))}",
+            f"  SMS envoyes: {metrics.get('sms', metrics.get('smsSent', 0))}",
+            f"  WA envoyes: {metrics.get('whatsapp', metrics.get('whatsappSent', 0))}",
+            f"  Duree totale: {metrics.get('totalDuration', metrics.get('duration', 0))}s",
+        ]
+        return "\n".join(lines)
+
+    def team_list(self) -> str:
+        result = self._call_tool("team_list", {})
+        members = result if isinstance(result, list) else result.get("members", [])
+        if not members:
+            return "Aucun membre."
+        lines = [f"{len(members)} membres :\n"]
+        for m in members:
+            status = "En ligne" if m.get("online") else "Hors ligne"
+            lines.append(f"  {m.get('name', '?')} (ID: {m.get('id', '?')}) — {status}")
+        return "\n".join(lines)
+
+    # --- NOTIFICATIONS (read-only) ---
+
+    def notifications_get(self, user_id: str | None = None) -> str:
+        params = {}
+        if user_id:
+            params["userId"] = user_id
+        result = self._call_tool("notifications_get", params)
+        n = result if isinstance(result, dict) else {}
+        missed = n.get("missedCalls", n.get("missed_calls", []))
+        unread = n.get("unreadMessages", n.get("unread_messages", []))
+        lines = []
+        if missed:
+            lines.append(f"{len(missed)} appels manques :")
+            for m in missed[:10]:
+                contact = m.get("contactName", m.get("contact", {}).get("name", "?"))
+                dt = (m.get("date", m.get("createdAt", "?"))[:16]
+                      if m.get("date", m.get("createdAt")) else "?")
+                lines.append(f"  [{dt}] {contact} — {m.get('phone', '?')}")
+        if unread:
+            lines.append(f"\n{len(unread)} messages non lus :")
+            for m in unread[:10]:
+                contact = m.get("contactName", m.get("contact", {}).get("name", "?"))
+                channel = m.get("channel", m.get("type", "?"))
+                lines.append(f"  {contact} — {channel}")
+        if not lines:
+            return "Aucune notification en attente."
+        return "\n".join(lines)
+
+    def messages_unread(self, user_id: str | None = None) -> str:
+        params = {}
+        if user_id:
+            params["userId"] = user_id
+        result = self._call_tool("messages_unread", params)
+        r = result if isinstance(result, dict) else {}
+        sms = r.get("sms", 0)
+        wa = r.get("whatsapp", 0)
+        total = r.get("total", sms + wa)
+        return f"Messages non lus : {total} (SMS: {sms}, WhatsApp: {wa})"
+
+    # --- CALENDAR EVENTS (read-only) ---
+
+    def calendar_events(self, user_id: str, date_str: str | None = None,
+                        days: int | None = None) -> str:
+        if not date_str:
+            date_str = date.today().isoformat()
+        time_min = f"{date_str}T00:00:00"
+        if days:
+            end_date = (datetime.strptime(date_str, "%Y-%m-%d").date()
+                        + timedelta(days=days)).isoformat()
+        else:
+            end_date = date_str
+        time_max = f"{end_date}T23:59:59"
+
+        result = self._call_tool("calendar_events", {
+            "userId": user_id,
+            "timeMin": time_min,
+            "timeMax": time_max,
+        })
+        events = result if isinstance(result, list) else result.get("events", [])
+        if not events:
+            return f"Aucun evenement le {date_str}."
+        lines = [f"{len(events)} evenements :\n"]
+        for e in events:
+            start = e.get("start", {})
+            start_time = start.get("dateTime", start.get("date", "?"))
+            if "T" in str(start_time):
+                start_time = start_time[11:16]
+            end = e.get("end", {})
+            end_time = end.get("dateTime", end.get("date", "?"))
+            if "T" in str(end_time):
+                end_time = end_time[11:16]
+            summary = e.get("summary", "(sans titre)")
+            attendees = ", ".join([a.get("email", "?") for a in e.get("attendees", [])])
+            lines.append(f"  {start_time}-{end_time} {summary}")
+            if attendees:
+                lines.append(f"    Avec: {attendees}")
+        return "\n".join(lines)
+
+    # --- COACH IA (read-only) ---
+
+    def coach_tips(self, call_id: str) -> str:
+        result = self._call_tool("coach_tips_for_call", {"callId": call_id})
+        tips = result if isinstance(result, list) else result.get("tips", [])
+        if not tips:
+            return "Aucun tip de coaching pour cet appel."
+        lines = ["Tips coaching :\n"]
+        for i, tip in enumerate(tips, 1):
+            if isinstance(tip, dict):
+                lines.append(f"  {i}. {tip.get('text', tip.get('tip', str(tip)))}")
+            else:
+                lines.append(f"  {i}. {tip}")
         return "\n".join(lines)
 
     def calendar_check(self, date_str: str) -> str:
@@ -454,6 +580,38 @@ def handle_nextcall(command: str, args: list, profile) -> str:
             return format_error("Usage: nm nextcall gmail get <message_id> [--user <id>]")
         user_id = get_flag("user") or creds.get("user_id")
         return svc.gmail_get(user_id, args[0])
+
+    # --- TEAM (read-only) ---
+    elif command == "team.get":
+        user_id = get_flag("user") or (args[0] if args else creds.get("user_id"))
+        metrics_date = get_flag("date")
+        return svc.team_get(user_id, metrics_date)
+
+    elif command == "team.list":
+        return svc.team_list()
+
+    # --- NOTIFICATIONS (read-only) ---
+    elif command == "notifications.get":
+        user_id = get_flag("user")
+        return svc.notifications_get(user_id)
+
+    elif command == "messages.unread":
+        user_id = get_flag("user")
+        return svc.messages_unread(user_id)
+
+    # --- CALENDAR EVENTS (read-only) ---
+    elif command == "calendar.events":
+        user_id = get_flag("user") or creds.get("user_id")
+        date_str = get_flag("date")
+        days_str = get_flag("days")
+        days = int(days_str) if days_str else None
+        return svc.calendar_events(user_id, date_str, days)
+
+    # --- COACH IA ---
+    elif command == "coach.tips":
+        if not args:
+            return format_error("Usage: nm nextcall coach tips <call_id>")
+        return svc.coach_tips(args[0])
     elif command == "send.whatsapp":
         limit = profile.get_limit("nextcall", "whatsapp")
         if not tracker.check_and_increment("whatsapp", limit):
