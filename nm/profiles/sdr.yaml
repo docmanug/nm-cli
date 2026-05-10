@@ -1,34 +1,192 @@
 name: sdr
-description: Hermes SDR — prospection Nextmotion
+description: Sophie SDR — prospection Nextmotion
 
 services:
   monday:
-    boards: [8379500363]
+    boards:
+      fr_leads: 8379500363
+      contacts: 8379500370
+      enrollments: 18403793707
+      calls: 9188247163
+      tasks: 8793500112
+      meetings: 8793493881
+      sequences_template: 18403793715
+
     commands:
+      # Leads (FR Leads + Contacts)
       - leads.list
       - leads.get
       - leads.update
       - leads.note
       - leads.next-actions
-    column_map:
-      status: lead_status
-      phone: lead_phone
-      email: lead_email
-      company: lead_company
-      last_contact: date_mkqz4d3e
-      first_name: first_name
-      last_name: last_name
+      # Enrollments
+      - enrollment.create
+      - enrollment.get
+      - enrollment.update
+      # Calls
+      - call.log
+      - call.get
+      # Tasks
+      - tasks.today
+      - tasks.get
+      - tasks.done
+      # Meetings
+      - meeting.create
+
+    column_maps:
+      fr_leads:
+        status: lead_status
+        phone: lead_phone
+        email: lead_email
+        company: lead_company
+        first_name: first_name
+        last_name: last_name
+        last_call_date: date_mkqz4d3e
+        nb_tentatives: numeric_mm11gt66
+        sequence_active: color_mm1dz9hf
+        sequence_step: color_mm11a8p5
+        outcome_dernier_call: color_mm0rt6dn
+        resume_ia_call: long_text_mm0r85y
+        lead_score_ia: numeric_mm0rbmx5
+        next_step: long_text_mkqytkhj
+        next_step_date: date_mkqyjymk
+        call_priority: numeric_mm11ggfz
+        next_call_due: date_mm11n6fr
+
+      contacts:
+        status: nm_lead_status
+        phone: contact_mobile
+        email: contact_email
+        company: text_mkq1e98n
+        first_name: first_name
+        last_name: last_name
+        next_step: long_text_mkqyvkvq
+        next_step_date: date_mkqynbg5
+        sequence_active: color_mm1dsg0w
+
+      enrollments:
+        sequence: board_relation_mm1d2n2k
+        lead: board_relation_mm1dj5x3
+        sdr: multiple_person_mm1dydey
+        statut: color_mm1dvepc
+        current_step: numeric_mm1dd278
+        step_name: text_mm1dh2h2
+        enrolled_date: date_mm1dqckw
+        completed_date: date_mm1dnax4
+        total_attempts: numeric_mm1dhn3t
+        exit_reason: color_mm1d5qq9
+        dernier_canal: color_mm1dqprm
+        board_source: color_mm1dtwbd
+        progress: long_text_mm1sash8
+        source_item_id: text_mm1serbc
+
+      calls:
+        date: date_mkrj5yc4
+        heure: hour_mky7pk8f
+        duree: numeric_mkxj8z9w
+        sdr: multiple_person_mkr5rvzh
+        call_type: color_mkrtqmws
+        call_outcome: color_mkr96e32
+        linked_contact: board_relation_mm1sfp9n
+        link_fr_leads: board_relation_mkvde6kh
+        link_contacts: board_relation_mkvdxb7n
+        phone: phone_mkywmge9
+        transcript_raw: text_mkr9nwyf
+        transcript_ia: text_mkr977fk
+        note_globale: text_mkrh25qc
+        feedback_global: long_text_mkrh69e0
+        points_ameliorer: long_text_mkrhyam4
+        pain_level: color_mm0r2kj7
+        digital_maturity: color_mm0r8jg5
+        business_mindset: color_mm0rmeaj
+        change_friction: color_mm0r69pr
+        lien_call: text_mkr92pkd
+
+      tasks:
+        owner: person
+        status: status
+        task_type: color_mkpv6xgb
+        item_relation: board_relation_mkr4hv79
+        due_date: date4
+        description: long_text_mkpeyws0
+        sequence: color_mkr44303
+        resultat: color_mkr9madn
+        complete_date: date_mkr5djz2
+        nom: text_mkrhms2g
+        transcript: long_text_mks73ycz
+        telephone: phone_mks9hb0n
+
+      meetings:
+        people: person
+        status: color_mkpe8p71
+        type: color_mkpeqpqt
+        contacts_relation: board_relation_mkpe7v7q
+        companies_relation: board_relation_mkzf5p36
+        titre: text_mkxjz6wy
+        start_date: date_mkpefnz4
+        end_date: date_mkpeav6m
+        duree: numeric_mkxjd0e1
+        attendees: long_text_mkpef4mm
+
     allowed_statuses:
-      - New
-      - MQL
-      - Working
-      - Sequence
-      - No response
-      - Patient
-      - not interested - budget
-      - not interested - competitor
-      - not interested - no answer
-      - Non pertinent (pas d'esthetique)
+      fr_leads:
+        - New
+        - MQL
+        - Working
+        - Sequence
+        - No response
+        - Patient
+        - not interested - budget
+        - not interested - competitor
+        - not interested - no answer
+        - Non pertinent (pas d'esthetique)
+      contacts:
+        - Blank
+        - Meeting
+        - open opp
+        - Sequence
+        - Working
+        - Deal lost
+        - Patient
+        - Customer
+        - Ancien client
+      enrollments:
+        - Active
+        - Completed
+        - Abandoned
+        - Not interested
+        - No response
+        - Paused
+        - Converted
+      calls_outcome:
+        - Connecte
+        - RDV pris
+        - Pas repondu
+        - Pas interesse
+        - No answer
+        - meeting booked SDR
+        - Rappeler plus tard
+        - Connected
+        - Busy
+        - Left voicemail
+        - Wrong number
+      tasks:
+        - To Do
+        - Working on it
+        - Done
+        - Stuck
+
+    people_ids:
+      theo: 70103039
+      emmanuel: 3299630
+      santiago: 43763993
+      yasmina: 37456201
+      sophie: 103430792
+
+    sequence_ids:
+      cold_outreach_classic: 11499073813
+      mql_inbound: 11499069001
+      reactivation: 11499093256
 
   nextcall:
     commands:

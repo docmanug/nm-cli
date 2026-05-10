@@ -77,6 +77,58 @@ def format_limit_hit(category: str, current: int, max_limit: int) -> str:
     return f"Error: Limite atteinte : {current}/{max_limit} {category} aujourd'hui. Reset demain 00h."
 
 
+def format_tasks_list(tasks: list) -> str:
+    if not tasks:
+        return "Aucune tache a traiter aujourd'hui."
+    lines = [f"{len(tasks)} taches a traiter aujourd'hui :\n"]
+    for i, task in enumerate(tasks, 1):
+        lines.append(
+            f"#{i} {task['name']} | Type: {task.get('type', '?')} "
+            f"| Echeance: {task.get('due_date', '?')} | Tel: {task.get('phone', 'N/A')}"
+        )
+        desc = task.get("description", "")
+        if desc:
+            lines.append(f"   {desc[:100]}")
+    return "\n".join(lines)
+
+
+def format_task_detail(task: dict) -> str:
+    lines = [
+        f"{task['name']}",
+        f"  Type: {task.get('type', 'N/A')}",
+        f"  Statut: {task.get('status', 'N/A')}",
+        f"  Echeance: {task.get('due_date', 'N/A')}",
+        f"  Tel: {task.get('phone', 'N/A')}",
+    ]
+    desc = task.get("description", "")
+    if desc:
+        lines.append(f"  Description: {desc}")
+    notes = task.get("notes", [])
+    if notes:
+        lines.append("  Notes:")
+        for note in notes:
+            lines.append(f"    - {note}")
+    return "\n".join(lines)
+
+
+def format_enrollment_detail(enrollment: dict) -> str:
+    lines = [
+        f"Enrollment #{enrollment['id']} — {enrollment['name']}",
+        f"  Statut: {enrollment.get('statut', 'N/A')}",
+        f"  Step: {enrollment.get('current_step', '?')} — {enrollment.get('step_name', 'N/A')}",
+        f"  Tentatives: {enrollment.get('total_attempts', '0')}",
+        f"  Dernier canal: {enrollment.get('dernier_canal', 'N/A')}",
+    ]
+    exit_reason = enrollment.get("exit_reason", "")
+    if exit_reason:
+        lines.append(f"  Raison de sortie: {exit_reason}")
+    return "\n".join(lines)
+
+
+def format_item_created(item_type: str, item_id, item_name: str) -> str:
+    return f"{item_type} cree : #{item_id} — {item_name}"
+
+
 def format_contact(contact: dict) -> str:
     lines = [
         f"{contact.get('name', 'N/A')}",
