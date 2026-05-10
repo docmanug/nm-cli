@@ -387,8 +387,9 @@ class MondayService:
                 continue
             data = self._query(
                 '{ boards(ids: [%d]) { items_page(limit: 20, query_params: '
-                '{rules: [{column_id: "name", compare_value: ["%s"]}], '
-                'operator: or}) { items { id name column_values { id text } } } } }'
+                '{rules: [{column_id: "name", compare_value: ["%s"], '
+                'operator: contains_text}]}) '
+                '{ items { id name column_values { id text } } } } }'
                 % (bid, query.replace('"', '\\"'))
             )
             items = data["boards"][0]["items_page"]["items"]
