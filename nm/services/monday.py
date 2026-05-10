@@ -101,13 +101,27 @@ class MondayService:
         )
         return self._query(query)
 
-    def _list_items(self, board_name: str, limit: int = 50) -> list:
+    def _list_items(self, board_name: str, limit: int = 50,
+                    order_by_column: str | None = None,
+                    order_direction: str = "desc") -> list:
         bid = self._board_id(board_name)
-        data = self._query(
-            '{ boards(ids: [%d]) { items_page(limit: %d) { items '
-            '{ id name column_values { id text value } } } } }'
-            % (bid, limit)
-        )
+        if order_by_column:
+            col_id = self._col(board_name, order_by_column)
+            query_params = (
+                'query_params: {order_by: [{column_id: "%s", direction: %s}]}'
+                % (col_id, order_direction)
+            )
+            data = self._query(
+                '{ boards(ids: [%d]) { items_page(limit: %d, %s) { items '
+                '{ id name column_values { id text value } } } } }'
+                % (bid, limit, query_params)
+            )
+        else:
+            data = self._query(
+                '{ boards(ids: [%d]) { items_page(limit: %d) { items '
+                '{ id name column_values { id text value } } } } }'
+                % (bid, limit)
+            )
         return data["boards"][0]["items_page"]["items"]
 
     def _get_item(self, item_id: str) -> dict:
@@ -247,29 +261,48 @@ class MondayService:
     # --- CALLS LIST (read-only for managers) ---
 
     def calls_list(self, owner_filter: str | None = None,
+                   date_filter: str | None = None,
+                   days: int | None = None,
                    limit: int = 50) -> str:
-        items = self._list_items("calls", limit)
+        items = self._list_items("calls", limit, order_by_column="date")
         people_ids = self._config.get("people_ids", {})
+
+        # Resolve date filters
+        if date_filter == "today":
+            date_filter = date.today().isoformat()
+        if days and not date_filter:
+            from datetime import timedelta
+            cutoff = (date.today() - timedelta(days=days)).isoformat()
+        else:
+            cutoff = None
 
         calls = []
         for item in items:
             cols = self._parse_columns(item["column_values"])
-            sdr_col = self._col("calls", "sdr")
-            sdr_val = cols.get(sdr_col, "")
+            call_date = cols.get(self._col("calls", "date"), "")
 
-            # Filter by owner if specified
+            # Filter by date
+            if date_filter and call_date and not call_date.startswith(date_filter):
+                continue
+            if cutoff and call_date and call_date < cutoff:
+                continue
+
+            # Filter by owner (people column)
             if owner_filter:
+                sdr_col = self._col("calls", "sdr")
                 target_id = str(people_ids.get(owner_filter, ""))
-                if target_id and target_id not in str(
-                    next((c.get("value", "") for c in item["column_values"]
-                          if c["id"] == sdr_col), "")
-                ):
-                    continue
+                if target_id:
+                    sdr_value = next(
+                        (c.get("value", "") for c in item["column_values"]
+                         if c["id"] == sdr_col), ""
+                    )
+                    if target_id not in str(sdr_value):
+                        continue
 
             calls.append({
                 "id": item["id"],
                 "name": item["name"],
-                "date": cols.get(self._col("calls", "date"), "N/A"),
+                "date": call_date or "N/A",
                 "outcome": cols.get(self._col("calls", "call_outcome"), "N/A"),
                 "duration": cols.get(self._col("calls", "duree"), "?"),
             })
@@ -278,19 +311,28 @@ class MondayService:
     # --- MEETINGS LIST (read-only for managers) ---
 
     def meetings_list(self, date_filter: str | None = None,
+                      days: int | None = None,
                       limit: int = 50) -> str:
-        items = self._list_items("meetings", limit)
+        items = self._list_items("meetings", limit, order_by_column="start_date")
+
+        # Resolve date filters
+        if date_filter == "today":
+            date_filter = date.today().isoformat()
+        if days and not date_filter:
+            from datetime import timedelta
+            cutoff = (date.today() - timedelta(days=days)).isoformat()
+        else:
+            cutoff = None
 
         meetings = []
         for item in items:
             cols = self._parse_columns(item["column_values"])
             meeting_date = cols.get(self._col("meetings", "start_date"), "")
 
-            if date_filter:
-                if date_filter == "today":
-                    date_filter = date.today().isoformat()
-                if meeting_date and not meeting_date.startswith(date_filter):
-                    continue
+            if date_filter and meeting_date and not meeting_date.startswith(date_filter):
+                continue
+            if cutoff and meeting_date and meeting_date < cutoff:
+                continue
 
             meetings.append({
                 "id": item["id"],
@@ -735,12 +777,17 @@ def handle_monday(command: str, args: list, profile) -> str:
     # --- CALLS LIST ---
     elif command == "calls.list":
         owner = get_flag("owner")
-        return svc.calls_list(owner)
+        date_filter = get_flag("date")
+        days_str = get_flag("days")
+        days = int(days_str) if days_str else None
+        return svc.calls_list(owner, date_filter, days)
 
     # --- MEETINGS LIST ---
     elif command == "meetings.list":
         date_filter = get_flag("date")
-        return svc.meetings_list(date_filter)
+        days_str = get_flag("days")
+        days = int(days_str) if days_str else None
+        return svc.meetings_list(date_filter, days)
 
     # --- LEADS ---
     elif command == "leads.list":
