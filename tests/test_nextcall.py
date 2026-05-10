@@ -13,9 +13,11 @@ def nextcall():
 
 
 def _mock_response(data):
+    import json
     mock = MagicMock()
     mock.status_code = 200
     mock.json.return_value = data
+    mock.text = json.dumps(data)
     mock.raise_for_status = MagicMock()
     return mock
 

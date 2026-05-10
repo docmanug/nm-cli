@@ -19,8 +19,13 @@ class NextCallService:
         self._api_url = api_url
         self._user_id = user_id
 
+    _rpc_id = 0
+
     def _call_tool(self, tool: str, params: dict = None) -> dict:
+        NextCallService._rpc_id += 1
         payload = {
+            "jsonrpc": "2.0",
+            "id": NextCallService._rpc_id,
             "method": "tools/call",
             "params": {"name": tool, "arguments": params or {}},
         }
@@ -30,8 +35,41 @@ class NextCallService:
         }
         resp = requests.post(self._api_url, headers=headers, json=payload)
         resp.raise_for_status()
-        data = resp.json()
-        return data.get("result", data)
+
+        # Response may be SSE (event: message\ndata: {...}) or plain JSON
+        try:
+            text = resp.text.strip()
+        except Exception:
+            text = ""
+        if text.startswith("event:"):
+            # Parse SSE: extract last data: line
+            import json as _json
+            data_line = ""
+            for line in text.split("\n"):
+                if line.startswith("data: "):
+                    data_line = line[6:]
+            if data_line:
+                data = _json.loads(data_line)
+            else:
+                raise RuntimeError(f"SSE response without data: {text[:200]}")
+        else:
+            data = resp.json()
+
+        if "error" in data:
+            raise RuntimeError(f"NextCall error: {data['error']}")
+
+        # Extract content from MCP response
+        result = data.get("result", data)
+        if isinstance(result, dict) and "content" in result:
+            content = result["content"]
+            if isinstance(content, list) and content:
+                text_content = content[0].get("text", "{}")
+                import json as _json
+                try:
+                    return _json.loads(text_content)
+                except (_json.JSONDecodeError, TypeError):
+                    return {"text": text_content}
+        return result
 
     def contact_get(self, query: str) -> str:
         result = self._call_tool("contacts_search", {"query": query})
