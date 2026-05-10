@@ -27,7 +27,7 @@ def register_service(name, handler):
     SERVICE_REGISTRY[name] = handler
 
 
-@click.command(context_settings={"ignore_unknown_options": True, "allow_extra_args": True})
+@click.command(context_settings={"ignore_unknown_options": True, "allow_extra_args": True, "help_option_names": []})
 @click.argument("args", nargs=-1, type=click.UNPROCESSED)
 @click.pass_context
 def main(ctx, args):
