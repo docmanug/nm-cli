@@ -57,7 +57,17 @@ class MondayService:
     def _parse_columns(self, column_values: list) -> dict:
         result = {}
         for col in column_values:
-            result[col["id"]] = col.get("text", "")
+            text = col.get("text", "")
+            # Phone columns return masked text (e.g. +336****1432)
+            # Extract the real number from the value JSON
+            if "****" in text and col.get("value"):
+                try:
+                    val = json.loads(col["value"])
+                    if isinstance(val, dict) and "phone" in val:
+                        text = val["phone"]
+                except (json.JSONDecodeError, TypeError):
+                    pass
+            result[col["id"]] = text
         return result
 
     def _create_item(self, board_name: str, item_name: str,
