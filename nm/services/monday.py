@@ -58,17 +58,34 @@ class MondayService:
         result = {}
         for col in column_values:
             text = col.get("text") or ""
+            raw_value = col.get("value") or ""
             # Phone columns return masked text (e.g. +336****1432)
             # Extract the real number from the value JSON
-            if text and "****" in text and col.get("value"):
+            if text and "****" in text and raw_value:
                 try:
-                    val = json.loads(col["value"])
+                    val = json.loads(raw_value)
                     if isinstance(val, dict) and "phone" in val:
                         text = val["phone"]
                 except (json.JSONDecodeError, TypeError):
                     pass
             result[col["id"]] = text
+            # Store raw value for people columns (needed for owner filtering)
+            result[f"_raw_{col['id']}"] = raw_value
         return result
+
+    def _person_ids_in_column(self, cols: dict, col_id: str) -> list[int]:
+        """Extract person IDs from a people column raw value."""
+        raw = cols.get(f"_raw_{col_id}", "")
+        if not raw:
+            return []
+        try:
+            val = json.loads(raw)
+            if isinstance(val, dict):
+                return [p["id"] for p in val.get("personsAndTeams", [])
+                        if p.get("kind") == "person"]
+        except (json.JSONDecodeError, TypeError, KeyError):
+            pass
+        return []
 
     def _create_item(self, board_name: str, item_name: str,
                      column_values: dict, group_id: str = "topics") -> dict:
@@ -103,26 +120,42 @@ class MondayService:
 
     def _list_items(self, board_name: str, limit: int = 50,
                     order_by_column: str | None = None,
-                    order_direction: str = "desc") -> list:
+                    order_direction: str = "desc",
+                    paginate_all: bool = False) -> list:
         bid = self._board_id(board_name)
+        page_size = min(limit, 100)
+        qp = ""
         if order_by_column:
             col_id = self._col(board_name, order_by_column)
-            query_params = (
-                'query_params: {order_by: [{column_id: "%s", direction: %s}]}'
-                % (col_id, order_direction)
-            )
-            data = self._query(
-                '{ boards(ids: [%d]) { items_page(limit: %d, %s) { items '
-                '{ id name column_values { id text value } } } } }'
-                % (bid, limit, query_params)
-            )
-        else:
-            data = self._query(
-                '{ boards(ids: [%d]) { items_page(limit: %d) { items '
-                '{ id name column_values { id text value } } } } }'
-                % (bid, limit)
-            )
-        return data["boards"][0]["items_page"]["items"]
+            qp = (', query_params: {order_by: [{column_id: "%s", direction: %s}]}'
+                  % (col_id, order_direction))
+
+        all_items = []
+        cursor = None
+        while True:
+            if cursor:
+                data = self._query(
+                    '{ next_items_page(limit: %d, cursor: "%s") '
+                    '{ cursor items { id name column_values { id text value } } } }'
+                    % (page_size, cursor)
+                )
+                page = data["next_items_page"]
+            else:
+                data = self._query(
+                    '{ boards(ids: [%d]) { items_page(limit: %d%s) '
+                    '{ cursor items { id name column_values { id text value } } } } }'
+                    % (bid, page_size, qp)
+                )
+                page = data["boards"][0]["items_page"]
+
+            items = page.get("items", [])
+            all_items.extend(items)
+            cursor = page.get("cursor")
+
+            if not paginate_all or not cursor or len(all_items) >= limit:
+                break
+
+        return all_items[:limit] if not paginate_all else all_items
 
     def _get_item(self, item_id: str) -> dict:
         data = self._query(
@@ -150,27 +183,63 @@ class MondayService:
         return self._col(board_name, "deal_stage")
 
     def deals_list(self, board_name: str, group: str | None = None,
-                   limit: int = 100) -> str:
+                   owner_filter: str | None = None,
+                   limit: int = 500) -> str:
         bid = self._board_id(board_name)
+        people_ids = self._config.get("people_ids", {})
+
         if group:
             query = (
-                '{ boards(ids: [%d]) { groups(ids: ["%s"]) { items_page(limit: %d) '
-                '{ items { id name column_values { id text value } } } } } }'
-                % (bid, group, limit)
+                '{ boards(ids: [%d]) { groups(ids: ["%s"]) { items_page(limit: 100) '
+                '{ cursor items { id name column_values { id text value } } } } } }'
+                % (bid, group)
             )
             data = self._query(query)
-            groups = data["boards"][0].get("groups", [])
-            items = groups[0]["items_page"]["items"] if groups else []
+            grps = data["boards"][0].get("groups", [])
+            items = grps[0]["items_page"]["items"] if grps else []
+            cursor = grps[0]["items_page"].get("cursor") if grps else None
+            # Paginate within group
+            while cursor and len(items) < limit:
+                data = self._query(
+                    '{ next_items_page(limit: 100, cursor: "%s") '
+                    '{ cursor items { id name column_values { id text value } } } }'
+                    % cursor
+                )
+                page = data["next_items_page"]
+                items.extend(page.get("items", []))
+                cursor = page.get("cursor")
         else:
-            items = self._list_items(board_name, limit)
+            items = self._list_items(board_name, limit, paginate_all=True)
+
+        stage_col = self._deal_stage_col(board_name)
+        arr_col = self._col(board_name, "deal_arr")
+        close_col = (self._col(board_name, "close_date")
+                     if board_name != "renewal"
+                     else self._col(board_name, "renewal_date"))
+        owner_col = self._col(board_name, "deal_owner")
+
+        # Resolve owner filter to person ID
+        target_owner_id = None
+        if owner_filter:
+            target_owner_id = people_ids.get(owner_filter)
+            if not target_owner_id:
+                # Try to match by name substring
+                owner_filter_lower = owner_filter.lower()
 
         deals = []
         for item in items:
             cols = self._parse_columns(item["column_values"])
-            stage_col = self._deal_stage_col(board_name)
-            arr_col = self._col(board_name, "deal_arr")
-            close_col = self._col(board_name, "close_date") if board_name != "renewal" else self._col(board_name, "renewal_date")
-            owner_col = self._col(board_name, "deal_owner")
+
+            # Filter by owner (people column — client-side filtering)
+            if owner_filter:
+                if target_owner_id:
+                    person_ids = self._person_ids_in_column(cols, owner_col)
+                    if target_owner_id not in person_ids:
+                        continue
+                else:
+                    owner_text = cols.get(owner_col, "").lower()
+                    if owner_filter_lower not in owner_text:
+                        continue
 
             deals.append({
                 "id": item["id"],
@@ -216,15 +285,36 @@ class MondayService:
         }
         return format_deal_detail(deal)
 
-    def deals_pipeline(self, board_name: str) -> str:
-        items = self._list_items(board_name, limit=100)
+    def deals_pipeline(self, board_name: str,
+                       owner_filter: str | None = None) -> str:
+        items = self._list_items(board_name, limit=500, paginate_all=True)
         stage_col = self._deal_stage_col(board_name)
         arr_col = self._col(board_name, "deal_arr")
+        owner_col = self._col(board_name, "deal_owner")
+        people_ids = self._config.get("people_ids", {})
+
+        target_owner_id = None
+        if owner_filter:
+            target_owner_id = people_ids.get(owner_filter)
+            if not target_owner_id:
+                owner_filter_lower = owner_filter.lower()
 
         stages: dict = {}
         total_arr = 0.0
+        count = 0
         for item in items:
             cols = self._parse_columns(item["column_values"])
+
+            if owner_filter:
+                if target_owner_id:
+                    person_ids = self._person_ids_in_column(cols, owner_col)
+                    if target_owner_id not in person_ids:
+                        continue
+                else:
+                    owner_text = cols.get(owner_col, "").lower()
+                    if owner_filter_lower not in owner_text:
+                        continue
+
             stage = cols.get(stage_col, "Unknown")
             try:
                 arr = float(cols.get(arr_col, "0") or "0")
@@ -235,11 +325,12 @@ class MondayService:
             stages[stage]["count"] += 1
             stages[stage]["arr"] += arr
             total_arr += arr
+            count += 1
 
-        return format_pipeline_summary(
-            stages, self._board_label(board_name),
-            total_arr, len(items)
-        )
+        label = self._board_label(board_name)
+        if owner_filter:
+            label += f" ({owner_filter})"
+        return format_pipeline_summary(stages, label, total_arr, count)
 
     # --- COMPANIES ---
 
@@ -757,7 +848,8 @@ def handle_monday(command: str, args: list, profile) -> str:
     if command == "deals.list":
         board = get_flag("board") or "abonnements"
         group = get_flag("group")
-        return svc.deals_list(board, group)
+        owner = get_flag("owner")
+        return svc.deals_list(board, group, owner)
 
     elif command == "deals.get":
         if not args:
@@ -766,7 +858,8 @@ def handle_monday(command: str, args: list, profile) -> str:
 
     elif command == "deals.pipeline":
         board = get_flag("board") or "abonnements"
-        return svc.deals_pipeline(board)
+        owner = get_flag("owner")
+        return svc.deals_pipeline(board, owner)
 
     # --- COMPANIES ---
     elif command == "companies.get":
