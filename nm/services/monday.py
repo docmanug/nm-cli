@@ -351,19 +351,38 @@ class MondayService:
 
     # --- SEARCH ---
 
+    def _normalize_search(self, query: str) -> list[str]:
+        """Return search variants: original + stripped accents."""
+        import unicodedata
+        stripped = "".join(
+            c for c in unicodedata.normalize("NFD", query)
+            if unicodedata.category(c) != "Mn"
+        )
+        variants = [query]
+        if stripped != query:
+            variants.append(stripped)
+        return variants
+
     def _search_board(self, board_name: str, query: str,
                       limit: int = 20) -> list:
         bid = self._boards.get(board_name)
         if not bid:
             return []
-        data = self._query(
-            '{ boards(ids: [%d]) { items_page(limit: %d, query_params: '
-            '{rules: [{column_id: "name", compare_value: ["%s"], '
-            'operator: contains_text}]}) '
-            '{ items { id name column_values { id text value } } } } }'
-            % (int(bid), limit, query.replace('"', '\\"'))
-        )
-        return data["boards"][0]["items_page"]["items"]
+        seen = set()
+        all_items = []
+        for variant in self._normalize_search(query):
+            data = self._query(
+                '{ boards(ids: [%d]) { items_page(limit: %d, query_params: '
+                '{rules: [{column_id: "name", compare_value: ["%s"], '
+                'operator: contains_text}]}) '
+                '{ items { id name column_values { id text value } } } } }'
+                % (int(bid), limit, variant.replace('"', '\\"'))
+            )
+            for item in data["boards"][0]["items_page"]["items"]:
+                if item["id"] not in seen:
+                    seen.add(item["id"])
+                    all_items.append(item)
+        return all_items
 
     def deals_search(self, query: str) -> str:
         results = []
@@ -373,6 +392,8 @@ class MondayService:
             items = self._search_board(board_name, query)
             stage_col = self._deal_stage_col(board_name)
             arr_col = self._col(board_name, "deal_arr")
+            contacts_col = self._col(board_name, "contacts")
+            company_col = self._col(board_name, "company")
             for item in items:
                 cols = self._parse_columns(item["column_values"])
                 results.append({
@@ -381,15 +402,20 @@ class MondayService:
                     "board": self._board_label(board_name),
                     "stage": cols.get(stage_col, "N/A"),
                     "arr": cols.get(arr_col, "0"),
+                    "company": cols.get(company_col, ""),
+                    "contacts": cols.get(contacts_col, ""),
                 })
         if not results:
             return f"Aucun deal trouve pour '{query}'"
         lines = [f"{len(results)} deal(s) trouve(s) :\n"]
         for r in results:
-            lines.append(
-                f"#{r['id']} {r['name']} | {r['board']} "
-                f"| Stage: {r['stage']} | ARR: {r['arr']} EUR"
-            )
+            line = (f"#{r['id']} {r['name']} | {r['board']} "
+                    f"| Stage: {r['stage']} | ARR: {r['arr']} EUR")
+            if r.get("company"):
+                line += f" | Company: {r['company']}"
+            if r.get("contacts"):
+                line += f" | Contact: {r['contacts']}"
+            lines.append(line)
         return "\n".join(lines)
 
     def companies_search(self, query: str) -> str:
@@ -399,10 +425,13 @@ class MondayService:
         lines = [f"{len(items)} company(s) trouvee(s) :\n"]
         for item in items:
             cols = self._parse_columns(item["column_values"])
-            lines.append(
-                f"#{item['id']} {item['name']} "
-                f"| Statut: {cols.get(self._col('companies', 'status'), 'N/A')}"
-            )
+            contacts_col = self._col("companies", "contacts")
+            line = (f"#{item['id']} {item['name']} "
+                    f"| Statut: {cols.get(self._col('companies', 'status'), 'N/A')}")
+            contacts = cols.get(contacts_col, "")
+            if contacts:
+                line += f" | Contacts: {contacts}"
+            lines.append(line)
         return "\n".join(lines)
 
     # --- CALLS LIST (read-only for managers) ---
