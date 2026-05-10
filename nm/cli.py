@@ -91,3 +91,6 @@ def main(ctx, args):
 # Register services
 from nm.services.monday import handle_monday
 register_service("monday", handle_monday)
+
+from nm.services.nextcall import handle_nextcall
+register_service("nextcall", handle_nextcall)
