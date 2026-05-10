@@ -57,10 +57,10 @@ class MondayService:
     def _parse_columns(self, column_values: list) -> dict:
         result = {}
         for col in column_values:
-            text = col.get("text", "")
+            text = col.get("text") or ""
             # Phone columns return masked text (e.g. +336****1432)
             # Extract the real number from the value JSON
-            if "****" in text and col.get("value"):
+            if text and "****" in text and col.get("value"):
                 try:
                     val = json.loads(col["value"])
                     if isinstance(val, dict) and "phone" in val:
