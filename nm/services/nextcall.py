@@ -130,7 +130,6 @@ class NextCallService:
         if user_id:
             params["userId"] = user_id
         if days and not date_from:
-
             date_from = (date.today() - timedelta(days=days)).isoformat()
             date_to = date.today().isoformat()
         if date_from:
@@ -141,13 +140,25 @@ class NextCallService:
         calls_data = result if isinstance(result, list) else result.get("calls", [])
         calls = []
         for c in calls_data:
-            contact_name = c.get("contactName", c.get("contact", {}).get("name", "?"))
+            # Contact: nested object
+            contact = c.get("contact", {})
+            contact_name = contact.get("name", "?") if isinstance(contact, dict) else str(contact)
+            # User: nested object
+            user = c.get("user", {})
+            user_name = user.get("name", "") if isinstance(user, dict) else ""
+            # Date: started_at or created_at
+            dt = c.get("started_at", c.get("created_at", ""))
+            if dt:
+                dt = dt[:16].replace("T", " ")
+            else:
+                dt = "?"
             calls.append({
                 "id": c.get("id", "?"),
-                "date": c.get("date", c.get("startedAt", "?"))[:10] if c.get("date", c.get("startedAt")) else "?",
+                "date": dt,
                 "contact": contact_name,
+                "user": user_name,
                 "status": c.get("status", "?"),
-                "label": c.get("label", ""),
+                "label": c.get("ai_label", c.get("label", "")),
                 "duration": c.get("duration", 0),
                 "direction": c.get("direction", "?"),
             })
@@ -261,6 +272,33 @@ class NextCallService:
 
     # --- SMS (read-only) ---
 
+    def _parse_message(self, m: dict) -> dict:
+        """Parse SMS/WhatsApp message from NextCall API response."""
+        # Date: created_at is the authoritative field
+        dt = m.get("created_at", m.get("date", m.get("createdAt", "")))
+        if dt:
+            dt = dt[:16].replace("T", " ")  # "2026-04-30 08:24"
+        else:
+            dt = "?"
+        # Contact: nested object or flat
+        contact = m.get("contact", {})
+        if isinstance(contact, dict):
+            contact_name = contact.get("name", "?")
+        else:
+            contact_name = m.get("contactName", str(contact))
+        # User (sender if outbound)
+        user = m.get("user", {})
+        user_name = user.get("name", "") if isinstance(user, dict) else ""
+
+        return {
+            "date": dt,
+            "direction": m.get("direction", "?"),
+            "contact": contact_name,
+            "user": user_name,
+            "body": (m.get("body", "") or "")[:150],
+            "status": m.get("status", ""),
+        }
+
     def sms_list(self, user_id: str | None = None,
                  contact_id: str | None = None,
                  date_from: str | None = None,
@@ -272,7 +310,6 @@ class NextCallService:
         if contact_id:
             params["contactId"] = contact_id
         if days and not date_from:
-
             date_from = (date.today() - timedelta(days=days)).isoformat()
             date_to = date.today().isoformat()
         if date_from:
@@ -285,12 +322,13 @@ class NextCallService:
             return "Aucun SMS."
         lines = [f"{len(messages)} SMS :\n"]
         for i, m in enumerate(messages, 1):
-            direction = m.get("direction", "?")
-            body = (m.get("body", "") or "")[:100]
-            dt = (m.get("date", m.get("createdAt", "?"))[:16]
-                  if m.get("date", m.get("createdAt")) else "?")
-            contact = m.get("contactName", m.get("contact", {}).get("name", m.get("contactId", "?")))
-            lines.append(f"#{i} [{dt}] {direction} {contact}: {body}")
+            p = self._parse_message(m)
+            sender = p["user"] if p["direction"] == "outbound" and p["user"] else ""
+            lines.append(
+                f"#{i} [{p['date']}] {p['direction']}"
+                f"{' (' + sender + ')' if sender else ''}"
+                f" → {p['contact']}: {p['body']}"
+            )
         return "\n".join(lines)
 
     # --- WHATSAPP (read-only) ---
@@ -306,7 +344,6 @@ class NextCallService:
         if contact_id:
             params["contactId"] = contact_id
         if days and not date_from:
-
             date_from = (date.today() - timedelta(days=days)).isoformat()
             date_to = date.today().isoformat()
         if date_from:
@@ -319,12 +356,13 @@ class NextCallService:
             return "Aucun message WhatsApp."
         lines = [f"{len(messages)} messages WhatsApp :\n"]
         for i, m in enumerate(messages, 1):
-            direction = m.get("direction", "?")
-            body = (m.get("body", "") or "")[:100]
-            dt = (m.get("date", m.get("createdAt", "?"))[:16]
-                  if m.get("date", m.get("createdAt")) else "?")
-            contact = m.get("contactName", m.get("contact", {}).get("name", m.get("contactId", "?")))
-            lines.append(f"#{i} [{dt}] {direction} {contact}: {body}")
+            p = self._parse_message(m)
+            sender = p["user"] if p["direction"] == "outbound" and p["user"] else ""
+            lines.append(
+                f"#{i} [{p['date']}] {p['direction']}"
+                f"{' (' + sender + ')' if sender else ''}"
+                f" → {p['contact']}: {p['body']}"
+            )
         return "\n".join(lines)
 
     # --- GMAIL (read-only) ---
