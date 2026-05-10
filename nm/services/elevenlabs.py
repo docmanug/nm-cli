@@ -15,9 +15,23 @@ class ElevenLabsService:
             "Content-Type": "application/json",
         }
 
-    def call_trigger(self, phone: str, context: str) -> str:
+    def call_trigger(self, phone: str, context: str = "",
+                     prospect_name: str = "", lead_id: str = "",
+                     contact_id: str = "", call_type: str = "First attempt",
+                     hook_type: str = "cold_intro") -> str:
         if not self._phone_number_id:
             return format_error("ELEVENLABS_PHONE_NUMBER_ID non configure")
+        dyn_vars = {
+            "prospect_name": prospect_name or "Inconnu",
+            "call_type": call_type,
+            "hook_type": hook_type,
+        }
+        if context:
+            dyn_vars["context"] = context
+        if lead_id:
+            dyn_vars["lead_item_id"] = lead_id
+        if contact_id:
+            dyn_vars["contact_item_id"] = contact_id
         resp = requests.post(
             f"{ELEVENLABS_API_URL}/convai/twilio/outbound-call",
             headers=self._headers,
@@ -26,7 +40,7 @@ class ElevenLabsService:
                 "agent_phone_number_id": self._phone_number_id,
                 "to_number": phone,
                 "conversation_initiation_client_data": {
-                    "dynamic_variables": {"context": context}
+                    "dynamic_variables": dyn_vars
                 },
             },
         )
@@ -90,13 +104,23 @@ def handle_elevenlabs(command: str, args: list, profile) -> str:
             from nm.core.output import format_limit_hit
             return format_limit_hit("calls", tracker.get_count("calls"), limit)
         if not args:
-            return format_error("Usage: nm elevenlabs call trigger <phone> [--context \"...\"]")
+            return format_error('Usage: nm elevenlabs call trigger <phone> [--name "Dr X"] [--lead-id 123] [--context "..."]')
         phone = args[0]
-        context = ""
-        for i, a in enumerate(args):
-            if a == "--context" and i + 1 < len(args):
-                context = args[i + 1]
-        return svc.call_trigger(phone, context)
+        # Parse flags
+        def _flag(name):
+            for i, a in enumerate(args):
+                if a == f"--{name}" and i + 1 < len(args):
+                    return args[i + 1]
+            return ""
+        return svc.call_trigger(
+            phone,
+            context=_flag("context"),
+            prospect_name=_flag("name"),
+            lead_id=_flag("lead-id"),
+            contact_id=_flag("contact-id"),
+            call_type=_flag("call-type") or "First attempt",
+            hook_type=_flag("hook-type") or "cold_intro",
+        )
     elif command == "call.result":
         if not args:
             return format_error("Usage: nm elevenlabs call result <conversation_id>")
