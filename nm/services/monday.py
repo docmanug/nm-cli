@@ -5,7 +5,9 @@ import requests
 from nm.core.output import (
     format_leads_list, format_lead_detail, format_error,
     format_tasks_list, format_task_detail, format_enrollment_detail,
-    format_item_created,
+    format_item_created, format_deals_list, format_deal_detail,
+    format_pipeline_summary, format_company_detail, format_meetings_list,
+    format_calls_list_detailed,
 )
 
 MONDAY_API_URL = "https://api.monday.com/v2"
@@ -110,6 +112,187 @@ class MondayService:
             raise RuntimeError(f"Item {item_id} non trouve")
         return items[0]
 
+    # --- DEALS ---
+
+    def _board_label(self, board_name: str) -> str:
+        labels = {
+            "abonnements": "Abonnements",
+            "renewal": "Renewal",
+            "machine": "Machine",
+        }
+        return labels.get(board_name, board_name)
+
+    def _deal_stage_col(self, board_name: str) -> str:
+        return self._col(board_name, "deal_stage")
+
+    def deals_list(self, board_name: str, group: str | None = None,
+                   limit: int = 100) -> str:
+        bid = self._board_id(board_name)
+        if group:
+            query = (
+                '{ boards(ids: [%d]) { groups(ids: ["%s"]) { items_page(limit: %d) '
+                '{ items { id name column_values { id text value } } } } } }'
+                % (bid, group, limit)
+            )
+            data = self._query(query)
+            groups = data["boards"][0].get("groups", [])
+            items = groups[0]["items_page"]["items"] if groups else []
+        else:
+            items = self._list_items(board_name, limit)
+
+        deals = []
+        for item in items:
+            cols = self._parse_columns(item["column_values"])
+            stage_col = self._deal_stage_col(board_name)
+            arr_col = self._col(board_name, "deal_arr")
+            close_col = self._col(board_name, "close_date") if board_name != "renewal" else self._col(board_name, "renewal_date")
+            owner_col = self._col(board_name, "deal_owner")
+
+            deals.append({
+                "id": item["id"],
+                "name": item["name"],
+                "stage": cols.get(stage_col, "N/A"),
+                "arr": cols.get(arr_col, "0"),
+                "close_date": cols.get(close_col, "N/A"),
+                "owner": cols.get(owner_col, ""),
+            })
+        return format_deals_list(deals, self._board_label(board_name))
+
+    def deals_get(self, item_id: str) -> str:
+        item = self._get_item(item_id)
+        board_id = str(item.get("board", {}).get("id", ""))
+        cols = self._parse_columns(item["column_values"])
+
+        # Detect which board
+        board_name = "abonnements"
+        for name, bid in self._boards.items():
+            if str(bid) == board_id:
+                board_name = name
+                break
+
+        stage_col = self._deal_stage_col(board_name)
+        close_key = "close_date" if board_name != "renewal" else "renewal_date"
+
+        deal = {
+            "id": item["id"],
+            "name": item["name"],
+            "board": self._board_label(board_name),
+            "stage": cols.get(stage_col, "N/A"),
+            "contract_status": cols.get(self._col(board_name, "contract_status"), "N/A"),
+            "arr": cols.get(self._col(board_name, "deal_arr"), "0"),
+            "mrr": cols.get(self._col(board_name, "deal_mrr"), "0"),
+            "tcv": cols.get(self._col(board_name, "deal_tcv"), "0"),
+            "terms": cols.get(self._col(board_name, "terms"), "N/A"),
+            "close_date": cols.get(self._col(board_name, close_key), "N/A"),
+            "contract_end_date": cols.get(self._col(board_name, "contract_end_date"), "N/A"),
+            "payment_date": cols.get(self._col(board_name, "payment_date"), "N/A"),
+            "owner": cols.get(self._col(board_name, "deal_owner"), "N/A"),
+            "company": cols.get(self._col(board_name, "company"), "N/A"),
+            "notes": [u["text_body"] for u in item.get("updates", [])],
+        }
+        return format_deal_detail(deal)
+
+    def deals_pipeline(self, board_name: str) -> str:
+        items = self._list_items(board_name, limit=100)
+        stage_col = self._deal_stage_col(board_name)
+        arr_col = self._col(board_name, "deal_arr")
+
+        stages: dict = {}
+        total_arr = 0.0
+        for item in items:
+            cols = self._parse_columns(item["column_values"])
+            stage = cols.get(stage_col, "Unknown")
+            try:
+                arr = float(cols.get(arr_col, "0") or "0")
+            except (ValueError, TypeError):
+                arr = 0.0
+            if stage not in stages:
+                stages[stage] = {"count": 0, "arr": 0.0}
+            stages[stage]["count"] += 1
+            stages[stage]["arr"] += arr
+            total_arr += arr
+
+        return format_pipeline_summary(
+            stages, self._board_label(board_name),
+            total_arr, len(items)
+        )
+
+    # --- COMPANIES ---
+
+    def companies_get(self, item_id: str) -> str:
+        item = self._get_item(item_id)
+        cols = self._parse_columns(item["column_values"])
+        company = {
+            "id": item["id"],
+            "name": item["name"],
+            "status": cols.get(self._col("companies", "status"), "N/A"),
+            "phone": cols.get(self._col("companies", "phone"), "N/A"),
+            "city": cols.get(self._col("companies", "city"), "N/A"),
+            "country": cols.get(self._col("companies", "country"), "N/A"),
+            "cs": cols.get(self._col("companies", "cs"), "N/A"),
+            "superadmin_matching": cols.get(self._col("companies", "superadmin_matching"), "N/A"),
+        }
+        return format_company_detail(company)
+
+    # --- CALLS LIST (read-only for managers) ---
+
+    def calls_list(self, owner_filter: str | None = None,
+                   limit: int = 50) -> str:
+        items = self._list_items("calls", limit)
+        people_ids = self._config.get("people_ids", {})
+
+        calls = []
+        for item in items:
+            cols = self._parse_columns(item["column_values"])
+            sdr_col = self._col("calls", "sdr")
+            sdr_val = cols.get(sdr_col, "")
+
+            # Filter by owner if specified
+            if owner_filter:
+                target_id = str(people_ids.get(owner_filter, ""))
+                if target_id and target_id not in str(
+                    next((c.get("value", "") for c in item["column_values"]
+                          if c["id"] == sdr_col), "")
+                ):
+                    continue
+
+            calls.append({
+                "id": item["id"],
+                "name": item["name"],
+                "date": cols.get(self._col("calls", "date"), "N/A"),
+                "outcome": cols.get(self._col("calls", "call_outcome"), "N/A"),
+                "duration": cols.get(self._col("calls", "duree"), "?"),
+            })
+        return format_calls_list_detailed(calls)
+
+    # --- MEETINGS LIST (read-only for managers) ---
+
+    def meetings_list(self, date_filter: str | None = None,
+                      limit: int = 50) -> str:
+        items = self._list_items("meetings", limit)
+
+        meetings = []
+        for item in items:
+            cols = self._parse_columns(item["column_values"])
+            meeting_date = cols.get(self._col("meetings", "start_date"), "")
+
+            if date_filter:
+                if date_filter == "today":
+                    date_filter = date.today().isoformat()
+                if meeting_date and not meeting_date.startswith(date_filter):
+                    continue
+
+            meetings.append({
+                "id": item["id"],
+                "name": item["name"],
+                "title": cols.get(self._col("meetings", "titre"), item["name"]),
+                "date": meeting_date or "N/A",
+                "type": cols.get(self._col("meetings", "type"), "N/A"),
+                "status": cols.get(self._col("meetings", "status"), "N/A"),
+                "people": cols.get(self._col("meetings", "people"), ""),
+            })
+        return format_meetings_list(meetings)
+
     # --- LEADS (FR Leads + Contacts) ---
 
     def _detect_lead_board(self, item_id: str) -> str:
@@ -186,6 +369,15 @@ class MondayService:
 
     def leads_next_actions(self) -> str:
         return self.leads_list("fr_leads")
+
+    def leads_create(self, name: str, column_values: dict,
+                     board_name: str = "fr_leads") -> str:
+        mapped = {}
+        for key, value in column_values.items():
+            col_id = self._col(board_name, key)
+            mapped[col_id] = value
+        item = self._create_item(board_name, name, mapped)
+        return format_item_created("Lead", item["id"], name)
 
     # --- ENROLLMENTS ---
 
@@ -479,8 +671,39 @@ def handle_monday(command: str, args: list, profile) -> str:
                 i += 1
         return result
 
+    # --- DEALS ---
+    if command == "deals.list":
+        board = get_flag("board") or "abonnements"
+        group = get_flag("group")
+        return svc.deals_list(board, group)
+
+    elif command == "deals.get":
+        if not args:
+            return format_error("Usage: nm monday deals get <item_id>")
+        return svc.deals_get(args[0])
+
+    elif command == "deals.pipeline":
+        board = get_flag("board") or "abonnements"
+        return svc.deals_pipeline(board)
+
+    # --- COMPANIES ---
+    elif command == "companies.get":
+        if not args:
+            return format_error("Usage: nm monday companies get <item_id>")
+        return svc.companies_get(args[0])
+
+    # --- CALLS LIST ---
+    elif command == "calls.list":
+        owner = get_flag("owner")
+        return svc.calls_list(owner)
+
+    # --- MEETINGS LIST ---
+    elif command == "meetings.list":
+        date_filter = get_flag("date")
+        return svc.meetings_list(date_filter)
+
     # --- LEADS ---
-    if command == "leads.list":
+    elif command == "leads.list":
         board = get_flag("board") or "fr_leads"
         return svc.leads_list(board)
 
@@ -521,6 +744,16 @@ def handle_monday(command: str, args: list, profile) -> str:
 
     elif command == "leads.next-actions":
         return svc.leads_next_actions()
+
+    elif command == "leads.create":
+        name = get_flag("name")
+        if not name:
+            return format_error('Usage: nm monday leads create --name "Prenom Nom" [--phone "+33..."] [--email "..."] [--board fr_leads]')
+        board = get_flag("board") or "fr_leads"
+        flags = get_json_flags()
+        flags.pop("name", None)
+        flags.pop("board", None)
+        return svc.leads_create(name, flags, board)
 
     # --- ENROLLMENTS ---
     elif command == "enrollment.create":
