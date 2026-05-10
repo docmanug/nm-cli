@@ -20,6 +20,9 @@ services:
       - deals.pipeline
       # Companies (read-only)
       - companies.get
+      - companies.search
+      # Deals search
+      - deals.search
       # Leads (read-only)
       - leads.list
       - leads.get
