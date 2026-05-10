@@ -379,6 +379,35 @@ class MondayService:
         item = self._create_item(board_name, name, mapped)
         return format_item_created("Lead", item["id"], name)
 
+    def leads_search(self, query: str) -> str:
+        results = []
+        for board_name in ("fr_leads", "contacts"):
+            bid = self._boards.get(board_name)
+            if not bid:
+                continue
+            data = self._query(
+                '{ boards(ids: [%d]) { items_page(limit: 20, query_params: '
+                '{rules: [{column_id: "name", compare_value: ["%s"]}], '
+                'operator: or}) { items { id name column_values { id text } } } } }'
+                % (bid, query.replace('"', '\\"'))
+            )
+            items = data["boards"][0]["items_page"]["items"]
+            for item in items:
+                cols = self._parse_columns(item["column_values"])
+                results.append({
+                    "id": item["id"],
+                    "name": item["name"],
+                    "board": board_name,
+                    "status": cols.get(self._col(board_name, "status"), "N/A"),
+                    "phone": cols.get(self._col(board_name, "phone"), "N/A"),
+                })
+        if not results:
+            return f"Aucun lead trouve pour '{query}'"
+        lines = [f"{len(results)} lead(s) trouve(s) :\n"]
+        for r in results:
+            lines.append(f"#{r['id']} {r['name']} | {r['board']} | Statut: {r['status']} | Tel: {r['phone']}")
+        return "\n".join(lines)
+
     # --- ENROLLMENTS ---
 
     def enrollment_create(self, lead_id: str, lead_name: str,
@@ -744,6 +773,11 @@ def handle_monday(command: str, args: list, profile) -> str:
 
     elif command == "leads.next-actions":
         return svc.leads_next_actions()
+
+    elif command == "leads.search":
+        if not args:
+            return format_error('Usage: nm monday leads search "nom ou terme"')
+        return svc.leads_search(" ".join(args))
 
     elif command == "leads.create":
         name = get_flag("name")

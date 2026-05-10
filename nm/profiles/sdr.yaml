@@ -16,6 +16,7 @@ services:
       # Leads (FR Leads + Contacts)
       - leads.list
       - leads.get
+      - leads.search
       - leads.create
       - leads.update
       - leads.note
