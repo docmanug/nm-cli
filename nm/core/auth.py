@@ -15,6 +15,7 @@ SERVICE_CREDENTIALS = {
     "elevenlabs": [
         ("ELEVENLABS_API_KEY", "api_key", True),
         ("ELEVENLABS_AGENT_ID", "agent_id", True),
+        ("ELEVENLABS_PHONE_NUMBER_ID", "phone_number_id", True),
     ],
     "circle": [
         ("CIRCLE_API_TOKEN", "api_token", True),

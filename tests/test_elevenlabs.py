@@ -6,7 +6,7 @@ from nm.services.elevenlabs import ElevenLabsService
 
 @pytest.fixture
 def elevenlabs():
-    return ElevenLabsService(api_key="test-key", agent_id="agent_123")
+    return ElevenLabsService(api_key="test-key", agent_id="agent_123", phone_number_id="phnum_test")
 
 
 def _mock_response(data, status=200):

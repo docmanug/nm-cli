@@ -6,21 +6,24 @@ ELEVENLABS_API_URL = "https://api.elevenlabs.io/v1"
 
 
 class ElevenLabsService:
-    def __init__(self, api_key: str, agent_id: str):
+    def __init__(self, api_key: str, agent_id: str, phone_number_id: str = ""):
         self._api_key = api_key
         self._agent_id = agent_id
+        self._phone_number_id = phone_number_id
         self._headers = {
             "xi-api-key": api_key,
             "Content-Type": "application/json",
         }
 
     def call_trigger(self, phone: str, context: str) -> str:
+        if not self._phone_number_id:
+            return format_error("ELEVENLABS_PHONE_NUMBER_ID non configure")
         resp = requests.post(
             f"{ELEVENLABS_API_URL}/convai/twilio/outbound-call",
             headers=self._headers,
             json={
                 "agent_id": self._agent_id,
-                "agent_phone_number_id": phone,
+                "agent_phone_number_id": self._phone_number_id,
                 "to_number": phone,
                 "conversation_initiation_client_data": {
                     "dynamic_variables": {"context": context}
@@ -74,7 +77,11 @@ def handle_elevenlabs(command: str, args: list, profile) -> str:
     from nm.core.limits import LimitTracker
 
     creds = get_credentials("elevenlabs")
-    svc = ElevenLabsService(api_key=creds["api_key"], agent_id=creds["agent_id"])
+    svc = ElevenLabsService(
+        api_key=creds["api_key"],
+        agent_id=creds["agent_id"],
+        phone_number_id=creds.get("phone_number_id", ""),
+    )
     tracker = LimitTracker()
 
     if command == "call.trigger":
