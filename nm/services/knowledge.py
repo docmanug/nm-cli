@@ -58,10 +58,15 @@ def handle_knowledge(command: str, args: list, profile) -> str:
         vector_store_id=creds["vector_store_id"],
     )
 
-    if command == "search":
-        if not args:
+    # nm-cli joins command parts with dots: "search botox" → command="search.botox"
+    # For knowledge, only "search" is a command — everything after is the query
+    if command.startswith("search"):
+        # Extract query from dotted command + args
+        query_from_cmd = command[len("search"):].lstrip(".")
+        query_parts = ([query_from_cmd] if query_from_cmd else []) + list(args)
+        query = " ".join(query_parts)
+        if not query:
             return format_error('Usage: nm knowledge search "votre question"')
-        query = " ".join(args)
         return svc.search(query)
     else:
         return format_error(f"Commande knowledge inconnue: {command}")
