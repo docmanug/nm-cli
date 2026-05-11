@@ -1,0 +1,162 @@
+name: coach
+description: Jerome Coach Bot — read-only access to all services for personal coaching
+
+services:
+  monday:
+    boards:
+      todolist: 91564594
+      abonnements: 8379500369
+      renewal: 9299481671
+      machine: 9299534048
+      companies: 8379500364
+      contacts: 8379500370
+      fr_leads: 8379500363
+      calls: 9188247163
+      meetings: 8793493881
+      editorial: 18408302636
+      cs_dashboard: 18404571977
+
+    commands:
+      - deals.list
+      - deals.get
+      - deals.search
+      - deals.pipeline
+      - calls.list
+      - calls.get
+      - meetings.list
+      - companies.get
+      - companies.search
+      - leads.list
+      - leads.get
+      - items.list
+      - items.get
+
+    column_maps:
+      todolist:
+        status: status
+        date: date
+        texte: texte
+
+      abonnements:
+        deal_stage: deal_abon20_pipeline
+        contract_status: color_mkrtrwcy
+        deal_arr: deal_arr_fina
+        deal_mrr: deal_mrrfi
+        deal_tcv: deal_tcv_fina
+        close_date: deal_close_date
+        contract_end_date: contract_end_date
+        company: board_relation_mkpfb3a2
+        contacts: deal_contacts
+        deal_owner: deal_owner
+
+      renewal:
+        deal_stage: deal_renew_pipeline
+        contract_status: color_mkrt9g56
+        deal_arr: deal_arr_fina
+        deal_mrr: deal_mrrfi
+        deal_tcv: deal_tcv_fina
+        renewal_date: deal_close_date
+        contract_end_date: contract_end_date
+        company: board_relation_mkpfb3a2
+        contacts: deal_contacts
+        deal_owner: deal_owner
+        churned: color_mkqwdnsx
+
+      contacts:
+        status: nm_lead_status
+        company: board_relation_mkqagmb0
+        email: contact_email
+        first_name: first_name
+        last_name: last_name
+        login_this_month: login_this_month
+        login_last_month: login_last_month
+
+      editorial:
+        date: date_mm2bscb4
+        validation: color_mm2bzzy2
+        canal: color_mm2be1pa
+        type_contenu: color_mm2bpe9n
+        score_perf: rating_mm2b26cd
+
+      cs_dashboard:
+        cs: text_mm1kt0xm
+        arr: numeric_mm1kw4s1
+        fin_contrat: date_mm1k5rt9
+        churn_status: text_mm1kyh7c
+
+    people_ids:
+      emmanuel: 3299630
+      theo: 70103039
+      santiago: 43763993
+      yasmina: 37456201
+      sophie: 103430792
+
+  nextcall:
+    commands:
+      - calls.list
+      - calls.get
+      - calls.stats
+      - transcripts.list
+      - transcripts.get
+      - transcripts.recent
+      - transcripts.search
+      - transcripts.stats
+      - sms.list
+      - whatsapp.list
+      - gmail.list
+      - gmail.get
+      - team.get
+      - team.list
+      - calendar.events
+      - calendar.check
+      - contacts.list
+      - contacts.get
+      - contacts.search
+      - meetings.list
+      - meetings.get
+      - meetings.search
+      - meetings.stats
+      - notifications.get
+      - messages.unread
+    user_ids:
+      emmanuel: a6178af6-2e87-4a97-9315-d95aa3eb4231
+      theo: 242ca4d7-37ef-487a-aaf0-83e06a936a29
+      santiago: 8c53bb5c-01f6-4707-8da9-09a496f2976d
+      yasmina: a6432a76-2c53-4ef7-bb14-bcb9deb1607b
+      juliette: 4d88b171-ad39-42aa-be82-ee867c90bfb2
+
+  stripe:
+    commands:
+      - transactions.list
+      - subscriptions.list
+      - invoices.list
+      - balance.get
+      - customers.list
+      - products.list
+
+  supabase:
+    commands:
+      - sessions.list
+      - sessions.get
+      - sessions.summaries
+      - messages.search
+
+  circle:
+    commands:
+      - spaces.list
+      - posts.list
+      - members.list
+      - stats
+
+  meta:
+    commands:
+      - campaigns.list
+      - campaigns.insights
+      - adsets.insights
+      - ads.insights
+    ad_account_id: act_43491791
+
+  blotato:
+    commands:
+      - accounts.list
+      - post.status
