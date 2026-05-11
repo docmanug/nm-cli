@@ -97,3 +97,15 @@ register_service("nextcall", handle_nextcall)
 
 from nm.services.elevenlabs import handle_elevenlabs
 register_service("elevenlabs", handle_elevenlabs)
+
+from nm.services.blotato import handle_blotato
+register_service("blotato", handle_blotato)
+
+from nm.services.circle import handle_circle
+register_service("circle", handle_circle)
+
+from nm.services.meta import handle_meta
+register_service("meta", handle_meta)
+
+from nm.services.unipile import handle_unipile
+register_service("unipile", handle_unipile)

@@ -41,6 +41,9 @@ SERVICE_CREDENTIALS = {
         ("N8N_API_KEY", "api_key", True),
         ("N8N_API_URL", "api_url", True),
     ],
+    "unipile": [
+        ("UNIPILE_API_KEY", "api_key", True),
+    ],
     "supabase": [
         ("SUPABASE_URL", "url", True),
         ("SUPABASE_SERVICE_KEY", "service_key", True),

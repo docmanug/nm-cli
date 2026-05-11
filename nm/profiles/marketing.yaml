@@ -1,0 +1,89 @@
+name: marketing
+description: Anna Marketing Manager — contenu, ads, communaute pour cabinet/Nextmotion/IA-Esthetique
+
+services:
+  monday:
+    boards:
+      editorial: 18408302636
+      todolist_nm: 91564594
+
+    commands:
+      # Calendrier editorial (read + update statut/metrics)
+      - items.list
+      - items.get
+      - items.update
+      # Notes de performance
+      - items.note
+
+    column_maps:
+      editorial:
+        date: date_mm2bscb4
+        validation: color_mm2bzzy2
+        canal: color_mm2be1pa
+        type_contenu: color_mm2bpe9n
+        categorie: color_mm2bxw5q
+        destination: color_mm2bfgyv
+        segment_email: color_mm2b4vpa
+        contenu: long_text_mm2bztc8
+        url_visuel: text_mm2bx8vc
+        cta_lien: text_mm2bp4k0
+        heure_publi: hour_mm2n2hm5
+        url_post: link_mm2njbdy
+        notes_perf: long_text_mm2bxeg8
+        impressions: numeric_mm2bmmg3
+        engagement: numeric_mm2bvsz4
+        clics: numeric_mm2bdd4y
+        conversions: numeric_mm2b6fq9
+        taux_engagement: numeric_mm2bvxr2
+        ctr: numeric_mm2bnf5k
+        commentaires: numeric_mm2bavyt
+        saves_partages: numeric_mm2bnh8v
+        nouveaux_followers: numeric_mm2bg0pn
+        score_perf: rating_mm2b26cd
+        fichier: file_mm2ge3t
+
+      todolist_nm:
+        status: status
+        date: date
+        texte: texte
+
+    allowed_statuses:
+      editorial:
+        - Brouillon
+        - En cours
+        - Pret
+        - Fait
+        - Bloque
+
+  blotato:
+    commands:
+      - accounts.list
+      - post.create
+      - post.status
+    limits:
+      posts: 20
+
+  circle:
+    commands:
+      - spaces.list
+      - posts.list
+      - members.list
+      - stats
+
+  meta:
+    commands:
+      # Lecture seule — monitoring
+      - campaigns.list
+      - campaigns.insights
+      - adsets.insights
+      - ads.insights
+    ad_account_id: act_43491791
+
+  unipile:
+    commands:
+      - accounts.list
+      - post.get
+      - post.stats
+      - post.comments
+      - post.reactions
+      - posts.list
