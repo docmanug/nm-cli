@@ -91,6 +91,16 @@ services:
       - pixel.stats
       - pixel.diagnostics
       - pixel.events
+      # Creation
+      - campaigns.create
+      - adsets.create
+      - ads.create
+      - creatives.create
+      - images.upload
+      - videos.upload
+      - entity.update
+      - pages.list
+      - audiences.list
     ad_account_id: act_43491791
 
   heygen:
