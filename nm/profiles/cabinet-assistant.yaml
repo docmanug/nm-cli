@@ -3,7 +3,7 @@ description: Assistant cabinet — gestion patients, devis, agenda, communicatio
 
 services:
   nextcall:
-    clinic_id: "TO_FILL"
+    clinic_id: "5686b59c-0507-4039-b411-50e8494a4064"
 
     commands:
       # Patients Nextmotion
