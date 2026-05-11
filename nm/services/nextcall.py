@@ -604,7 +604,7 @@ def handle_nextcall(command: str, args: list, profile) -> str:
 
     # --- CALLS (read-only) ---
     elif command == "calls.list":
-        user_id = resolve_user(get_flag("user")) or creds.get("user_id")
+        user_id = resolve_user(get_flag("user"))  # None = all users
         date_from = get_flag("from")
         date_to = get_flag("to")
         days_str = get_flag("days")
@@ -618,7 +618,7 @@ def handle_nextcall(command: str, args: list, profile) -> str:
         return svc.calls_get(args[0], include_coaching=coaching)
 
     elif command == "calls.stats":
-        user_id = resolve_user(get_flag("user")) or creds.get("user_id")
+        user_id = resolve_user(get_flag("user"))  # None = all users
         days_str = get_flag("days")
         days = int(days_str) if days_str else None
         return svc.calls_stats(user_id, get_flag("from"), get_flag("to"), days)
