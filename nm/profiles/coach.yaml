@@ -4,7 +4,7 @@ description: Jerome Coach Bot — read-only access to all services for personal 
 services:
   monday:
     boards:
-      todolist: 91564594
+      tasks: 91564594
       abonnements: 8379500369
       renewal: 9299481671
       machine: 9299534048
@@ -32,10 +32,12 @@ services:
       - tasks.get
 
     column_maps:
-      todolist:
+      tasks:
         status: status
-        date: date
-        texte: texte
+        due_date: date
+        task_type: texte
+        description: texte
+        telephone: phone
 
       abonnements:
         deal_stage: deal_abon20_pipeline
