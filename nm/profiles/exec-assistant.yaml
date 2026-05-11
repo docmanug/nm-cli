@@ -27,9 +27,6 @@ services:
 
   nextcall:
     commands:
-      # Gmail (read-only)
-      - gmail.list
-      - gmail.get
       # Calendar (read-only)
       - calendar.events
       - calendar.check
