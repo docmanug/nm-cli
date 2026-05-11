@@ -219,3 +219,10 @@ services:
       - call.trigger
       - call.result
       - call.list-today
+
+  supabase:
+    commands:
+      - sessions.list
+      - sessions.get
+      - sessions.summaries
+      - messages.search

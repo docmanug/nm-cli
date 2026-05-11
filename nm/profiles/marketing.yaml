@@ -87,3 +87,10 @@ services:
       - post.comments
       - post.reactions
       - posts.list
+
+  supabase:
+    commands:
+      - sessions.list
+      - sessions.get
+      - sessions.summaries
+      - messages.search

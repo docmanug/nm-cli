@@ -197,3 +197,10 @@ services:
       emmanuel: a6178af6-2e87-4a97-9315-d95aa3eb4231
       santiago: 8c53bb5c-01f6-4707-8da9-09a496f2976d
       sophie: 8a347333-5a65-4e38-8fb5-ec17b8ab1cf4
+
+  supabase:
+    commands:
+      - sessions.list
+      - sessions.get
+      - sessions.summaries
+      - messages.search
