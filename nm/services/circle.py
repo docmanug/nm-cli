@@ -81,14 +81,9 @@ class CircleService:
         return "\n".join(lines)
 
     def members_list(self, recent_days: int = 0, limit: int = 20) -> str:
-        body = {
-            "per_page": limit,
-            "order": "latest",
-            "status": "active",
-        }
-        data = self._post("/search/community_members", body)
-        members = data.get("data", [])
-        total = data.get("total_count", len(members))
+        data = self._get("/community_members", {"per_page": limit})
+        members = data.get("records", data.get("data", []))
+        total = data.get("count", len(members))
 
         if recent_days > 0:
             from datetime import datetime, timedelta
@@ -122,10 +117,9 @@ class CircleService:
         posts = data if isinstance(data, list) else data.get("records", data.get("data", []))
 
         # Get recent members
-        body = {"per_page": 100, "order": "latest", "status": "active"}
-        members_data = self._post("/search/community_members", body)
-        members = members_data.get("data", [])
-        total_members = members_data.get("total_count", len(members))
+        members_data = self._get("/community_members", {"per_page": 100})
+        members = members_data.get("records", members_data.get("data", []))
+        total_members = members_data.get("count", len(members))
 
         from datetime import datetime, timedelta
         cutoff = datetime.utcnow() - timedelta(days=period_days)
