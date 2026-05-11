@@ -127,6 +127,7 @@ services:
       - sessions.get
       - sessions.summaries
       - messages.search
+      - sessions.save
       # Video tasks (queue vers Mac cabinet)
       - video-tasks.create
       - video-tasks.list

@@ -226,3 +226,4 @@ services:
       - sessions.get
       - sessions.summaries
       - messages.search
+      - sessions.save

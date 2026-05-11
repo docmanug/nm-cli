@@ -22,6 +22,37 @@ class SupabaseService:
         resp.raise_for_status()
         return resp.json()
 
+    def _post(self, table: str, data: dict) -> dict:
+        resp = requests.post(
+            f"{self._url}/rest/v1/{table}",
+            headers={**self._headers, "Prefer": "return=representation"},
+            json=data,
+        )
+        resp.raise_for_status()
+        result = resp.json()
+        return result[0] if isinstance(result, list) else result
+
+    def sessions_save(self, summary: str, source: str = "telegram_agent",
+                      agent_name: str = "") -> str:
+        """Save a session summary — used by VPS agents to sync memory."""
+        session = self._post("sessions", {
+            "telegram_chat_id": 0,
+            "ended_by": "agent_sync",
+            "source": source,
+            "ended_at": datetime.utcnow().isoformat(),
+        })
+        session_id = session.get("id", "?")
+
+        # Save summary as assistant message
+        self._post("messages", {
+            "session_id": session_id,
+            "role": "assistant",
+            "content": summary,
+        })
+
+        return f"Session sauvegardee — ID: {session_id} | Source: {source}" + \
+               (f" | Agent: {agent_name}" if agent_name else "")
+
     def sessions_list(self, days: int = 7, source: str = "",
                       limit: int = 20) -> str:
         params = {
@@ -269,6 +300,16 @@ def handle_supabase(command: str, args: list, profile) -> str:
         days = int(_flag("days") or "7")
         limit = int(_flag("limit") or "10")
         return svc.sessions_summaries(days, limit)
+
+    elif command == "sessions.save":
+        summary = _flag("summary")
+        if not summary and args:
+            summary = " ".join([a for a in args if not a.startswith("--")])
+        if not summary:
+            return format_error('Usage: nm supabase sessions save --summary "Resume de la session" [--source telegram_anna] [--agent anna]')
+        source = _flag("source") or "telegram_agent"
+        agent = _flag("agent") or ""
+        return svc.sessions_save(summary, source, agent)
 
     elif command == "messages.search":
         if not args:
