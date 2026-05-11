@@ -58,6 +58,41 @@ services:
     user_ids:
       emmanuel: a6178af6-2e87-4a97-9315-d95aa3eb4231
 
+  nextmotion:
+    clinic_id: "5686b59c-0507-4039-b411-50e8494a4064"
+    commands:
+      # Patients
+      - patient.list
+      - patient.get
+      - patient.create
+      - patient.update
+      # RDV (agenda Nextmotion)
+      - rdv.list
+      - rdv.get
+      - rdv.update
+      - rdv.delete
+      - rdv.reschedule
+      # Leads
+      - lead.list
+      - lead.get
+      - lead.create
+      - lead.update
+      - lead.convert
+      # Devis
+      - quote.list
+      - quote.get
+      - quote.update-followup
+      # Chat
+      - chat.contacts
+      - chat.send
+      # Labels
+      - labels.list
+      # Creneaux & types de visite
+      - visit-types.list
+      - slots.list
+      # Praticiens
+      - doctor.list
+
   elevenlabs:
     commands:
       - call.trigger

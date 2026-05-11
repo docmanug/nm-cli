@@ -66,7 +66,7 @@ class Profile:
         if self._is_full:
             return ["monday", "nextcall", "elevenlabs", "circle", "blotato",
                     "stripe", "qonto", "meta", "telegram", "n8n", "supabase",
-                    "unipile", "heygen", "gdrive"]
+                    "unipile", "heygen", "gdrive", "nextmotion"]
         return list(self._services.keys())
 
     def available_commands(self, service: str) -> list:

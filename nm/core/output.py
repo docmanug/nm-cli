@@ -419,3 +419,199 @@ def format_chat_contacts(contacts: list) -> str:
         phone = c.get("phone", c.get("mobile", "N/A"))
         lines.append(f"#{i} {name} | Tel: {phone} | ID: {c.get('id', '?')}")
     return "\n".join(lines)
+
+
+# ---- Nextmotion Native Formatters ----
+
+
+def format_nm_patient(p: dict) -> str:
+    name = f"{p.get('first_name', '')} {p.get('last_name', '')}".strip() or "N/A"
+    lines = [
+        name,
+        f"  ID: {p.get('id', 'N/A')}",
+        f"  Tel: {p.get('phone_number', 'N/A')}",
+        f"  Email: {p.get('email', 'N/A')}",
+        f"  Date naissance: {p.get('birth_date', 'N/A')}",
+        f"  Sexe: {['F', 'M', 'Autre'][p['gender']] if isinstance(p.get('gender'), int) and p['gender'] < 3 else 'N/A'}",
+    ]
+    city = p.get("city", "")
+    if city:
+        lines.append(f"  Ville: {city}")
+    comments = p.get("doctor_comments", "")
+    if comments:
+        # Strip HTML tags for display
+        import re
+        clean = re.sub(r'<[^>]+>', ' ', str(comments)).strip()
+        if clean:
+            lines.append(f"  Notes medecin: {clean[:500]}")
+    return "\n".join(lines)
+
+
+def format_nm_patients_list(patients: list) -> str:
+    if not patients:
+        return "Aucun patient."
+    lines = [f"{len(patients)} patients :\n"]
+    for i, p in enumerate(patients, 1):
+        name = f"{p.get('first_name', '')} {p.get('last_name', '')}".strip() or "?"
+        phone = p.get("phone_number", "N/A")
+        email = p.get("email", "")
+        lines.append(f"#{i} {name} | Tel: {phone} | ID: {p.get('id', '?')}")
+    return "\n".join(lines)
+
+
+def format_nm_appointment(a: dict) -> str:
+    event = a.get("calendar_event", {})
+    patient = a.get("patient", {})
+    patient_name = f"{patient.get('first_name', '')} {patient.get('last_name', '')}".strip() if isinstance(patient, dict) else str(patient)
+    start = event.get("start_time", "?")
+    end = event.get("end_time", "?")
+    lines = [
+        f"RDV #{a.get('id', '?')}",
+        f"  Patient: {patient_name or 'N/A'}",
+        f"  Debut: {start}",
+        f"  Fin: {end}",
+        f"  Titre: {event.get('title', 'N/A')}",
+        f"  Statut: {a.get('status', 'N/A')}",
+        f"  Type: {a.get('subject', a.get('visit_type_name', 'N/A'))}",
+    ]
+    notes = event.get("notes", "")
+    if notes:
+        lines.append(f"  Notes: {notes[:500]}")
+    return "\n".join(lines)
+
+
+def format_nm_appointments_list(appointments: list, date_str: str = "") -> str:
+    if not appointments:
+        return f"Aucun RDV{' le ' + date_str if date_str else ''}."
+    lines = [f"{len(appointments)} RDV{' le ' + date_str if date_str else ''} :\n"]
+    for i, a in enumerate(appointments, 1):
+        event = a.get("calendar_event", {})
+        patient = a.get("patient", {})
+        patient_name = f"{patient.get('first_name', '')} {patient.get('last_name', '')}".strip() if isinstance(patient, dict) else "?"
+        start = event.get("start_time", "?")
+        if isinstance(start, str) and "T" in start:
+            start = start[11:16]
+        end = event.get("end_time", "?")
+        if isinstance(end, str) and "T" in end:
+            end = end[11:16]
+        status = a.get("status", "?")
+        subject = a.get("subject", "")
+        lines.append(f"#{i} {start}-{end} {patient_name} | {subject} | {status} | ID: {a.get('id', '?')}")
+    return "\n".join(lines)
+
+
+def format_nm_lead(lead: dict) -> str:
+    name = f"{lead.get('first_name', '')} {lead.get('last_name', '')}".strip() or "N/A"
+    lines = [
+        name,
+        f"  ID: {lead.get('id', 'N/A')}",
+        f"  Tel: {lead.get('phone_number', 'N/A')}",
+        f"  Email: {lead.get('email', 'N/A')}",
+        f"  Source: {lead.get('source_name', lead.get('source', 'N/A'))}",
+        f"  Statut: {lead.get('status_name', lead.get('status', 'N/A'))}",
+        f"  Traitement souhaite: {lead.get('desired_treatment_name', lead.get('desired_treatment', 'N/A'))}",
+        f"  Suivis: {lead.get('follow_up_count', 0)}",
+        f"  Traite: {'Oui' if lead.get('is_done') else 'Non'}",
+    ]
+    notes = lead.get("notes", "")
+    if notes:
+        lines.append(f"  Notes: {str(notes)[:500]}")
+    return "\n".join(lines)
+
+
+def format_nm_leads_list(leads: list) -> str:
+    if not leads:
+        return "Aucun lead."
+    lines = [f"{len(leads)} leads :\n"]
+    for i, l in enumerate(leads, 1):
+        name = f"{l.get('first_name', '')} {l.get('last_name', '')}".strip() or "?"
+        phone = l.get("phone_number", "N/A")
+        status = l.get("status_name", l.get("status", "?"))
+        lines.append(f"#{i} {name} | Tel: {phone} | Statut: {status} | ID: {l.get('id', '?')}")
+    return "\n".join(lines)
+
+
+def format_nm_quote_native(q: dict) -> str:
+    patient = q.get("patient", {})
+    patient_name = f"{patient.get('first_name', '')} {patient.get('last_name', '')}".strip() if isinstance(patient, dict) else str(patient)
+    lines = [
+        f"Devis #{q.get('id', '?')}",
+        f"  Patient: {patient_name or 'N/A'}",
+        f"  Date: {q.get('created_time', q.get('created_at', 'N/A'))}",
+        f"  Titre: {q.get('title', 'N/A')}",
+        f"  Montant: {q.get('total_amount', q.get('amount', 'N/A'))} EUR",
+        f"  Statut: {q.get('status', 'N/A')}",
+    ]
+    followup = q.get("last_follow_up_time", "")
+    if followup:
+        lines.append(f"  Dernier suivi: {followup}")
+    next_fu = q.get("next_follow_up_time", "")
+    if next_fu:
+        lines.append(f"  Prochain suivi: {next_fu}")
+    return "\n".join(lines)
+
+
+def format_nm_quotes_list_native(quotes: list) -> str:
+    if not quotes:
+        return "Aucun devis."
+    lines = [f"{len(quotes)} devis :\n"]
+    for i, q in enumerate(quotes, 1):
+        patient = q.get("patient", {})
+        patient_name = f"{patient.get('first_name', '')} {patient.get('last_name', '')}".strip() if isinstance(patient, dict) else "?"
+        amount = q.get("total_amount", q.get("amount", "?"))
+        dt = q.get("created_time", q.get("created_at", "?"))
+        if isinstance(dt, str) and len(dt) > 10:
+            dt = dt[:10]
+        lines.append(f"#{i} [{dt}] {patient_name} | {amount} EUR | ID: {q.get('id', '?')}")
+    return "\n".join(lines)
+
+
+def format_nm_labels_list_native(labels: list) -> str:
+    if not labels:
+        return "Aucun label."
+    lines = [f"{len(labels)} labels :\n"]
+    for i, label in enumerate(labels, 1):
+        if isinstance(label, dict):
+            ltype = label.get("type", "")
+            lines.append(f"  {i}. [{ltype}] {label.get('name', '?')} (ID: {label.get('id', '?')})")
+        else:
+            lines.append(f"  {i}. {label}")
+    return "\n".join(lines)
+
+
+def format_nm_visit_types_list(vts: list) -> str:
+    if not vts:
+        return "Aucun type de visite."
+    lines = [f"{len(vts)} types de visite :\n"]
+    for i, vt in enumerate(vts, 1):
+        duration = vt.get("duration", "?")
+        lines.append(f"  {i}. {vt.get('name', vt.get('subject', '?'))} | Duree: {duration}min | ID: {vt.get('id', '?')}")
+    return "\n".join(lines)
+
+
+def format_nm_doctors_list(doctors: list) -> str:
+    if not doctors:
+        return "Aucun praticien."
+    lines = [f"{len(doctors)} praticiens :\n"]
+    for i, d in enumerate(doctors, 1):
+        name = f"{d.get('first_name', '')} {d.get('last_name', '')}".strip() or "?"
+        kind = d.get("kind", "?")
+        lines.append(f"  {i}. {name} | Type: {kind} | ID: {d.get('id', '?')}")
+    return "\n".join(lines)
+
+
+def format_nm_chat_contacts_list(contacts: list) -> str:
+    if not contacts:
+        return "Aucun contact chat."
+    lines = [f"{len(contacts)} contacts chat :\n"]
+    for i, c in enumerate(contacts, 1):
+        name = f"{c.get('first_name', '')} {c.get('last_name', '')}".strip() or c.get("name", "?")
+        phone = c.get("phone_number", c.get("phone", "N/A"))
+        last_msg = c.get("last_message", {})
+        last_text = ""
+        if isinstance(last_msg, dict):
+            last_text = (last_msg.get("text_body", "") or "")[:80]
+        lines.append(f"#{i} {name} | Tel: {phone} | ID: {c.get('id', '?')}")
+        if last_text:
+            lines.append(f"    Dernier msg: {last_text}")
+    return "\n".join(lines)

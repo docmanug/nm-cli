@@ -118,3 +118,6 @@ register_service("gdrive", handle_gdrive)
 
 from nm.services.supabase import handle_supabase
 register_service("supabase", handle_supabase)
+
+from nm.services.nextmotion import handle_nextmotion
+register_service("nextmotion", handle_nextmotion)
