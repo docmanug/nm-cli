@@ -57,3 +57,17 @@ services:
 
     user_ids:
       emmanuel: a6178af6-2e87-4a97-9315-d95aa3eb4231
+
+  elevenlabs:
+    commands:
+      - call.trigger
+      - call.result
+      - call.list-today
+
+  supabase:
+    commands:
+      - sessions.list
+      - sessions.get
+      - sessions.summaries
+      - messages.search
+      - sessions.save
