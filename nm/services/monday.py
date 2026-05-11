@@ -316,6 +316,45 @@ class MondayService:
         self._add_note(item_id, text)
         return f"Note ajoutee sur item {item_id}"
 
+    def item_full(self, item_id: str) -> str:
+        """Get full item detail with all column values."""
+        data = self._query(
+            '{ items(ids: [%s]) { id name board { id name } group { id title } '
+            'column_values { id title type text value } '
+            'updates(limit: 3) { text_body created_at } } }'
+            % item_id
+        )
+        items = data.get("items", [])
+        if not items:
+            return f"Item {item_id} non trouve"
+        item = items[0]
+        board = item.get("board", {})
+        group = item.get("group", {})
+        lines = [
+            f"{item['name']}",
+            f"  ID: {item['id']}",
+            f"  Board: {board.get('name', '?')} ({board.get('id', '?')})",
+            f"  Group: {group.get('title', '?')} ({group.get('id', '?')})",
+            f"",
+            f"COLONNES :",
+        ]
+        for col in item.get("column_values", []):
+            text = col.get("text", "")
+            raw = col.get("value", "")
+            if text or raw:
+                lines.append(f"  [{col['id']}] {col.get('title', '?')} ({col['type']})")
+                lines.append(f"    text: {text}")
+                if raw and raw != text:
+                    # Truncate raw JSON if too long
+                    raw_str = raw if len(str(raw)) < 200 else str(raw)[:200] + "..."
+                    lines.append(f"    value: {raw_str}")
+        updates = item.get("updates", [])
+        if updates:
+            lines.append(f"\nNOTES ({len(updates)}) :")
+            for u in updates:
+                lines.append(f"  [{(u.get('created_at', '') or '')[:16]}] {(u.get('text_body', '') or '')[:200]}")
+        return "\n".join(lines)
+
     # --- DEALS ---
 
     def _board_label(self, board_name: str) -> str:
@@ -1148,6 +1187,11 @@ def handle_monday(command: str, args: list, profile) -> str:
         if len(args) < 2:
             return format_error('Usage: nm monday board note <item_id> "texte"')
         return svc.item_note(args[0], " ".join(args[1:]))
+
+    elif command == "item.full":
+        if not args:
+            return format_error("Usage: nm monday item full <item_id>")
+        return svc.item_full(args[0])
 
     # --- DEALS ---
     elif command == "deals.list":

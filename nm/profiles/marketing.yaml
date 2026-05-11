@@ -23,6 +23,7 @@ services:
       - board.create-group
       - board.create-column
       - board.note
+      - item.full
 
     column_maps:
       editorial:
