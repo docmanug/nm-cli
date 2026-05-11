@@ -169,6 +169,153 @@ class MondayService:
             raise RuntimeError(f"Item {item_id} non trouve")
         return items[0]
 
+    # --- GENERIC (cross-board) ---
+
+    def search(self, query: str, limit: int = 20) -> str:
+        """Search items across all boards by name."""
+        data = self._query(
+            '{ items_page_by_column_values(limit: %d, board_id: 0, columns: [{column_id: "name", column_values: ["%s"]}]) '
+            '{ items { id name board { id name } column_values { id text } } } }'
+            % (limit, query.replace('"', '\\"'))
+        )
+        # Fallback: use complexity-friendly search
+        if "errors" in str(data):
+            data = self._query(
+                '{ boards(limit: 50, state: active) { id name items_page(limit: 5, '
+                'query_params: {rules: [{column_id: "name", compare_value: ["%s"], '
+                'operator: contains_text}]}) { items { id name } } } }'
+                % query.replace('"', '\\"')
+            )
+            results = []
+            for board in data.get("boards", []):
+                for item in board.get("items_page", {}).get("items", []):
+                    results.append(f"  #{item['id']} {item['name']} | Board: {board['name']}")
+            if not results:
+                return f"Aucun resultat pour '{query}'"
+            return f"{len(results)} resultats pour '{query}' :\n\n" + "\n".join(results)
+
+        items = data.get("items_page_by_column_values", {}).get("items", [])
+        if not items:
+            return f"Aucun resultat pour '{query}'"
+        lines = [f"{len(items)} resultats :\n"]
+        for item in items:
+            board = item.get("board", {})
+            lines.append(f"  #{item['id']} {item['name']} | Board: {board.get('name', '?')} ({board.get('id', '?')})")
+        return "\n".join(lines)
+
+    def boards_list(self, limit: int = 50) -> str:
+        """List all active boards."""
+        data = self._query(
+            '{ boards(limit: %d, state: active, order_by: used_at) '
+            '{ id name items_count board_kind } }' % limit
+        )
+        boards = data.get("boards", [])
+        if not boards:
+            return "Aucun board."
+        lines = [f"{len(boards)} boards :\n"]
+        for b in boards:
+            lines.append(
+                f"  [{b.get('id')}] {b.get('name')} — {b.get('items_count', '?')} items ({b.get('board_kind', '?')})"
+            )
+        return "\n".join(lines)
+
+    def board_info(self, board_id: int) -> str:
+        """Get board structure (columns, groups)."""
+        data = self._query(
+            '{ boards(ids: [%d]) { id name columns { id title type settings_str } '
+            'groups { id title } } }' % board_id
+        )
+        boards = data.get("boards", [])
+        if not boards:
+            return f"Board {board_id} non trouve"
+        b = boards[0]
+        lines = [f"Board: {b.get('name')} ({b.get('id')})\n"]
+        lines.append("COLONNES :")
+        for col in b.get("columns", []):
+            lines.append(f"  [{col['id']}] {col['title']} ({col['type']})")
+        lines.append("\nGROUPES :")
+        for grp in b.get("groups", []):
+            lines.append(f"  [{grp['id']}] {grp['title']}")
+        return "\n".join(lines)
+
+    def generic_items_list(self, board_id: int, limit: int = 25,
+                           group_id: str = "") -> str:
+        """List items from any board by ID."""
+        if group_id:
+            data = self._query(
+                '{ boards(ids: [%d]) { groups(ids: ["%s"]) { items_page(limit: %d) '
+                '{ items { id name column_values { id text } } } } } }'
+                % (board_id, group_id, limit)
+            )
+            grps = data["boards"][0].get("groups", [])
+            items = grps[0]["items_page"]["items"] if grps else []
+        else:
+            data = self._query(
+                '{ boards(ids: [%d]) { items_page(limit: %d) '
+                '{ items { id name column_values { id text } } } } }'
+                % (board_id, limit)
+            )
+            items = data["boards"][0]["items_page"]["items"]
+
+        if not items:
+            return f"Aucun item dans le board {board_id}."
+        lines = [f"{len(items)} items :\n"]
+        for item in items:
+            cols = self._parse_columns(item.get("column_values", []))
+            status = cols.get("status", cols.get("color", ""))
+            lines.append(f"  #{item['id']} {item['name']}" + (f" | {status}" if status else ""))
+        return "\n".join(lines)
+
+    def generic_item_create(self, board_id: int, item_name: str,
+                            group_id: str = "topics",
+                            column_values: dict | None = None) -> str:
+        """Create an item on any board."""
+        values_json = json.dumps(json.dumps(column_values or {}))
+        query = (
+            'mutation { create_item(board_id: %d, group_id: "%s", '
+            'item_name: %s, column_values: %s) { id name } }'
+            % (board_id, group_id, json.dumps(item_name), values_json)
+        )
+        data = self._query(query)
+        item = data["create_item"]
+        return f"Item cree : #{item['id']} — {item['name']} (board {board_id})"
+
+    def generic_item_update(self, board_id: int, item_id: str,
+                            column_values: dict) -> str:
+        """Update columns on any item."""
+        values_json = json.dumps(json.dumps(column_values))
+        query = (
+            'mutation { change_multiple_column_values(board_id: %d, '
+            'item_id: %s, column_values: %s) { id } }'
+            % (board_id, int(item_id), values_json)
+        )
+        self._query(query)
+        return f"Item {item_id} mis a jour (board {board_id})"
+
+    def group_create(self, board_id: int, group_name: str) -> str:
+        """Create a group on a board."""
+        data = self._query(
+            'mutation { create_group(board_id: %d, group_name: %s) { id title } }'
+            % (board_id, json.dumps(group_name))
+        )
+        grp = data["create_group"]
+        return f"Groupe cree : [{grp['id']}] {grp['title']} (board {board_id})"
+
+    def column_create(self, board_id: int, title: str,
+                      column_type: str = "text") -> str:
+        """Create a column on a board."""
+        data = self._query(
+            'mutation { create_column(board_id: %d, title: %s, column_type: %s) { id title type } }'
+            % (board_id, json.dumps(title), column_type)
+        )
+        col = data["create_column"]
+        return f"Colonne creee : [{col['id']}] {col['title']} ({col['type']}) (board {board_id})"
+
+    def item_note(self, item_id: str, text: str) -> str:
+        """Add a note/update to any item."""
+        self._add_note(item_id, text)
+        return f"Note ajoutee sur item {item_id}"
+
     # --- DEALS ---
 
     def _board_label(self, board_name: str) -> str:
@@ -935,8 +1082,75 @@ def handle_monday(command: str, args: list, profile) -> str:
                 i += 1
         return result
 
+    # --- GENERIC ---
+    if command == "search":
+        if not args:
+            return format_error('Usage: nm monday search "terme"')
+        limit = int(get_flag("limit") or "20")
+        return svc.search(" ".join([a for a in args if not a.startswith("--")]), limit)
+
+    elif command == "boards.list":
+        limit = int(get_flag("limit") or "50")
+        return svc.boards_list(limit)
+
+    elif command == "board.info":
+        board_id = args[0] if args else get_flag("board")
+        if not board_id:
+            return format_error("Usage: nm monday board info <board_id>")
+        return svc.board_info(int(board_id))
+
+    elif command == "board.items":
+        board_id = args[0] if args else get_flag("board")
+        if not board_id:
+            return format_error("Usage: nm monday board items <board_id> [--group <group_id>] [--limit 25]")
+        limit = int(get_flag("limit") or "25")
+        group_id = get_flag("group") or ""
+        return svc.generic_items_list(int(board_id), limit, group_id)
+
+    elif command == "board.create-item":
+        board_id = get_flag("board")
+        name = get_flag("name")
+        if not board_id or not name:
+            return format_error('Usage: nm monday board create-item --board <id> --name "Titre" [--group <group_id>] [--col_id value ...]')
+        group_id = get_flag("group") or "topics"
+        flags = get_json_flags()
+        flags.pop("board", None)
+        flags.pop("name", None)
+        flags.pop("group", None)
+        return svc.generic_item_create(int(board_id), name, group_id, flags if flags else None)
+
+    elif command == "board.update-item":
+        board_id = get_flag("board")
+        item_id = args[0] if args else get_flag("item")
+        if not board_id or not item_id:
+            return format_error('Usage: nm monday board update-item <item_id> --board <id> --col_id value ...')
+        flags = get_json_flags()
+        flags.pop("board", None)
+        flags.pop("item", None)
+        return svc.generic_item_update(int(board_id), item_id, flags)
+
+    elif command == "board.create-group":
+        board_id = get_flag("board")
+        name = get_flag("name") or (args[0] if args else "")
+        if not board_id or not name:
+            return format_error('Usage: nm monday board create-group --board <id> --name "Nom du groupe"')
+        return svc.group_create(int(board_id), name)
+
+    elif command == "board.create-column":
+        board_id = get_flag("board")
+        title = get_flag("title") or (args[0] if args else "")
+        col_type = get_flag("type") or "text"
+        if not board_id or not title:
+            return format_error('Usage: nm monday board create-column --board <id> --title "Nom" --type text|status|numbers|date|...')
+        return svc.column_create(int(board_id), title, col_type)
+
+    elif command == "board.note":
+        if len(args) < 2:
+            return format_error('Usage: nm monday board note <item_id> "texte"')
+        return svc.item_note(args[0], " ".join(args[1:]))
+
     # --- DEALS ---
-    if command == "deals.list":
+    elif command == "deals.list":
         board = get_flag("board") or "abonnements"
         group = get_flag("group")
         owner = get_flag("owner")

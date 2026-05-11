@@ -12,8 +12,17 @@ services:
       - items.list
       - items.get
       - items.update
-      # Notes de performance
       - items.note
+      # Generic cross-board
+      - search
+      - boards.list
+      - board.info
+      - board.items
+      - board.create-item
+      - board.update-item
+      - board.create-group
+      - board.create-column
+      - board.note
 
     column_maps:
       editorial:
