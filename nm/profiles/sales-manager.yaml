@@ -50,6 +50,8 @@ services:
         churned: color_mkqwdnsx
         source: color_mkvqc311
         upfront: color_mkr2fy4c
+        next_step: long_text_mkqyrfj6
+        next_step_date: date_mkqyq91x
 
       renewal:
         deal_stage: deal_renew_pipeline
@@ -69,6 +71,8 @@ services:
         cs: deal_cus_succ
         churned: color_mkqwdnsx
         upfront: color_mkr2fy4c
+        next_step: long_text_mkqyrfj6
+        next_step_date: date_mkqyq91x
 
       machine:
         deal_stage: deal_mach_pipeline
@@ -106,6 +110,8 @@ services:
         role: contact_role
         cs: customer_success
         superadmin_matching: color_mkyef1wt
+        next_step: long_text_mkqyvkvq
+        next_step_date: date_mkqynbg5
 
       fr_leads:
         status: lead_status
@@ -119,6 +125,8 @@ services:
         outcome_dernier_call: color_mm0rt6dn
         resume_ia_call: long_text_mm0r85y
         lead_score_ia: numeric_mm0rbmx5
+        next_step: long_text_mkqytkhj
+        next_step_date: date_mkqyjymk
 
       calls:
         date: date_mkrj5yc4

@@ -241,6 +241,8 @@ class MondayService:
                     if owner_filter_lower not in owner_text:
                         continue
 
+            ns = cols.get(self._col(board_name, "next_step"), "")
+            nsd = cols.get(self._col(board_name, "next_step_date"), "")
             deals.append({
                 "id": item["id"],
                 "name": item["name"],
@@ -248,6 +250,8 @@ class MondayService:
                 "arr": cols.get(arr_col, "0"),
                 "close_date": cols.get(close_col, "N/A"),
                 "owner": cols.get(owner_col, ""),
+                "next_step": ns,
+                "next_step_date": nsd,
             })
         return format_deals_list(deals, self._board_label(board_name))
 
@@ -281,6 +285,8 @@ class MondayService:
             "payment_date": cols.get(self._col(board_name, "payment_date"), "N/A"),
             "owner": cols.get(self._col(board_name, "deal_owner"), "N/A"),
             "company": cols.get(self._col(board_name, "company"), "N/A"),
+            "next_step": cols.get(self._col(board_name, "next_step"), ""),
+            "next_step_date": cols.get(self._col(board_name, "next_step_date"), ""),
             "notes": [u["text_body"] for u in item.get("updates", [])],
         }
         return format_deal_detail(deal)

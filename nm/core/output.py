@@ -142,6 +142,12 @@ def format_deals_list(deals: list, board_name: str = "") -> str:
         owner = deal.get("owner", "")
         if owner:
             lines.append(f"   Owner: {owner}")
+        ns = deal.get("next_step", "")
+        nsd = deal.get("next_step_date", "")
+        if ns or nsd:
+            lines.append(f"   Next Step: {ns or 'VIDE'} | Date: {nsd or 'VIDE'}")
+        else:
+            lines.append(f"   ⚠ Next Step: MANQUANT")
     return "\n".join(lines)
 
 
@@ -160,6 +166,8 @@ def format_deal_detail(deal: dict) -> str:
         f"  Payment Date: {deal.get('payment_date', 'N/A')}",
         f"  Owner: {deal.get('owner', 'N/A')}",
         f"  Company: {deal.get('company', 'N/A')}",
+        f"  Next Step: {deal.get('next_step') or 'VIDE'}",
+        f"  Next Step Date: {deal.get('next_step_date') or 'VIDE'}",
     ]
     notes = deal.get("notes", [])
     if notes:
