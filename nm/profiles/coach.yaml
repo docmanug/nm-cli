@@ -28,8 +28,8 @@ services:
       - companies.search
       - leads.list
       - leads.get
-      - items.list
-      - items.get
+      - tasks.today
+      - tasks.get
 
     column_maps:
       todolist:
