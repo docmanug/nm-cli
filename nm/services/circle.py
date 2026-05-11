@@ -53,7 +53,7 @@ class CircleService:
         params = {"per_page": limit, "status": "published"}
         if space_id and space_id != "all":
             params["space_id"] = space_id
-        data = self._get("/comments/posts", params)
+        data = self._get("/posts", params)
         posts = data if isinstance(data, list) else data.get("records", data.get("posts", data.get("data", [])))
         if no_reply:
             posts = [p for p in posts if p.get("comments_count", p.get("comment_count", 0)) == 0]
@@ -118,7 +118,7 @@ class CircleService:
     def stats(self, period_days: int = 7) -> str:
         # Get recent posts
         params = {"per_page": 100, "status": "published"}
-        data = self._get("/comments/posts", params)
+        data = self._get("/posts", params)
         posts = data if isinstance(data, list) else data.get("records", data.get("data", []))
 
         # Get recent members
