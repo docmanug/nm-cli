@@ -127,14 +127,8 @@ services:
       yasmina: a6432a76-2c53-4ef7-bb14-bcb9deb1607b
       juliette: 4d88b171-ad39-42aa-be82-ee867c90bfb2
 
-  stripe:
-    commands:
-      - transactions.list
-      - subscriptions.list
-      - invoices.list
-      - balance.get
-      - customers.list
-      - products.list
+  # stripe: TODO — service pas encore implemente dans nm-cli (Phase 2-3)
+  # Ajouter quand nm/services/stripe.py sera cree
 
   supabase:
     commands:
