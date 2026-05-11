@@ -77,6 +77,10 @@ services:
       - campaigns.insights
       - adsets.insights
       - ads.insights
+      # Pixel diagnostics
+      - pixel.stats
+      - pixel.diagnostics
+      - pixel.events
     ad_account_id: act_43491791
 
   unipile:

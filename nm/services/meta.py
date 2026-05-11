@@ -148,6 +148,64 @@ class MetaAdsService:
             )
         return "\n".join(lines)
 
+    def pixel_stats(self, pixel_id: str, date_range: str = "last_7d") -> str:
+        data = self._get(
+            f"/{pixel_id}/stats",
+            {"aggregation": "event", "start_time": "", "end_time": ""},
+        )
+        stats = data.get("data", [])
+        if not stats:
+            return f"Aucun event pixel {pixel_id}."
+        lines = [f"Pixel {pixel_id} — events recents :\n"]
+        for s in stats:
+            lines.append(
+                f"  {s.get('event', '?')}: {s.get('count', 0)} events | "
+                f"value: {s.get('value', 0)}"
+            )
+        return "\n".join(lines)
+
+    def pixel_diagnostics(self, pixel_id: str) -> str:
+        data = self._get(
+            f"/{pixel_id}/da_checks",
+            {"checks": '["pixel_fires","custom_conversions","page_view"]'},
+        )
+        checks = data.get("data", [])
+        if not checks:
+            return f"Aucun diagnostic pour pixel {pixel_id}."
+        lines = [f"Diagnostics pixel {pixel_id} :\n"]
+        for c in checks:
+            status = "OK" if c.get("result") == "passed" else "ERREUR"
+            lines.append(
+                f"  [{status}] {c.get('check_name', c.get('name', '?'))}: "
+                f"{c.get('description', c.get('message', ''))}"
+            )
+        return "\n".join(lines)
+
+    def pixel_events(self, pixel_id: str, limit: int = 20) -> str:
+        # Use the test events endpoint to see recent server events
+        data = self._get(
+            f"/{pixel_id}/test_events",
+            {"limit": limit},
+        )
+        events = data.get("data", [])
+        if not events:
+            # Fallback: try recent_events
+            data = self._get(
+                f"/{pixel_id}/recent_events",
+                {"limit": limit},
+            )
+            events = data.get("data", [])
+        if not events:
+            return f"Aucun event recent pixel {pixel_id}."
+        lines = [f"{len(events)} events recents pixel {pixel_id} :\n"]
+        for e in events:
+            lines.append(
+                f"  [{e.get('event_name', e.get('event', '?'))}] "
+                f"{e.get('timestamp', e.get('time', '?'))} — "
+                f"url: {e.get('url', e.get('event_source_url', 'N/A'))}"
+            )
+        return "\n".join(lines)
+
     def ads_insights(self, adset_id: str, date_range: str = "last_7d") -> str:
         date_preset = date_range.replace("-", "_")
         data = self._get(
@@ -228,6 +286,25 @@ def handle_meta(command: str, args: list, profile) -> str:
             return format_error("Usage: nm meta ads insights --adset <adset_id> [--date-range last_7d]")
         date_range = _flag("date-range") or "last_7d"
         return svc.ads_insights(adset_id, date_range)
+
+    elif command == "pixel.stats":
+        pixel_id = _flag("pixel") or args[0] if args else ""
+        if not pixel_id:
+            return format_error("Usage: nm meta pixel stats <pixel_id>")
+        return svc.pixel_stats(pixel_id)
+
+    elif command == "pixel.diagnostics":
+        pixel_id = _flag("pixel") or args[0] if args else ""
+        if not pixel_id:
+            return format_error("Usage: nm meta pixel diagnostics <pixel_id>")
+        return svc.pixel_diagnostics(pixel_id)
+
+    elif command == "pixel.events":
+        pixel_id = _flag("pixel") or args[0] if args else ""
+        if not pixel_id:
+            return format_error("Usage: nm meta pixel events <pixel_id>")
+        limit = int(_flag("limit") or "20")
+        return svc.pixel_events(pixel_id, limit)
 
     else:
         return format_error(f"Commande Meta inconnue: {command}")
