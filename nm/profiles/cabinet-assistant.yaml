@@ -1,0 +1,59 @@
+name: cabinet-assistant
+description: Assistant cabinet — gestion patients, devis, agenda, communication Nextmotion
+
+services:
+  nextcall:
+    clinic_id: "TO_FILL"
+
+    commands:
+      # Patients Nextmotion
+      - patient.get
+      - patient.search
+      # Devis Nextmotion
+      - quote.list
+      - quote.get
+      - quote.update-followup
+      # Chat Nextmotion
+      - chat.send
+      # Labels Nextmotion
+      - labels.list
+      # Communication
+      - send.sms
+      - send.whatsapp
+      - send.email
+      # Contacts
+      - contact.get
+      - contact.history
+      - contacts.create
+      - contacts.update
+      # Calendrier
+      - calendar.events
+      - calendar.check
+      - calendar.freebusy
+      - calendar.book
+      - calendar.update
+      - calendar.delete
+      # Appels
+      - calls.list
+      - calls.get
+      - calls.initiate
+      - calls.end
+      - calls.stats
+      # Notifications
+      - notifications.get
+      - messages.unread
+      # Team
+      - team.get
+      - team.list
+      # Meeting transcripts
+      - transcripts.list
+      - transcripts.get
+      - transcripts.recent
+      # Gmail
+      - gmail.list
+      - gmail.get
+      # Coach
+      - coach.tips
+
+    user_ids:
+      emmanuel: a6178af6-2e87-4a97-9315-d95aa3eb4231

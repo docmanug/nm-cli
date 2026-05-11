@@ -10,14 +10,20 @@ from nm.core.output import (
     format_nextcall_call_stats,
     format_meeting_transcript,
     format_meeting_transcripts_list,
+    format_patient,
+    format_quote,
+    format_quotes_list,
+    format_labels_list,
+    format_chat_contacts,
 )
 
 
 class NextCallService:
-    def __init__(self, api_key: str, api_url: str, user_id: str):
+    def __init__(self, api_key: str, api_url: str, user_id: str, clinic_id: str | None = None):
         self._api_key = api_key
         self._api_url = api_url
         self._user_id = user_id
+        self._clinic_id = clinic_id
 
     _rpc_id = 0
 
@@ -571,6 +577,123 @@ class NextCallService:
         event_id = result.get("id", "?")
         return f"Demo confirmee : {title} le {date_str} a {time} (event: {event_id})"
 
+    # --- NEXTMOTION PATIENTS ---
+
+    def patient_get(self, patient_id: str) -> str:
+        result = self._call_tool("nm_patient_retrieve", {"patient_id": patient_id})
+        return format_patient(result if isinstance(result, dict) else {})
+
+    def patient_search(self, query: str) -> str:
+        if not self._clinic_id:
+            return format_error("clinic_id requis (configurer dans le profil)")
+        params = {"clinic_id": self._clinic_id, "search": query, "user_type": 2}
+        result = self._call_tool("nm_chat_contact_search", params)
+        contacts = result if isinstance(result, list) else result.get("contacts", result.get("data", []))
+        return format_chat_contacts(contacts)
+
+    # --- NEXTMOTION DEVIS ---
+
+    def quote_list(self, limit: int = 50, offset: int = 0) -> str:
+        if not self._clinic_id:
+            return format_error("clinic_id requis (configurer dans le profil)")
+        params = {"clinic_id": self._clinic_id, "limit": limit}
+        if offset:
+            params["offset"] = offset
+        result = self._call_tool("nm_quote_list", params)
+        quotes = result if isinstance(result, list) else result.get("quotes", result.get("data", []))
+        return format_quotes_list(quotes)
+
+    def quote_get(self, quote_id: str) -> str:
+        result = self._call_tool("nm_quote_retrieve", {"quote_id": quote_id})
+        return format_quote(result if isinstance(result, dict) else {})
+
+    def quote_update_followup(self, quote_id: str, **kwargs) -> str:
+        params = {"quote_id": quote_id}
+        for key in ("last_follow_up_time", "next_follow_up_time", "follow_up_count",
+                     "last_channel_used", "response_received", "response_time",
+                     "last_contact_time"):
+            if key in kwargs and kwargs[key] is not None:
+                params[key] = kwargs[key]
+        self._call_tool("nm_quote_update_followup", params)
+        return f"Devis #{quote_id} suivi mis a jour."
+
+    # --- NEXTMOTION CHAT ---
+
+    def chat_send(self, contact_id: str, message: str,
+                  system: str = "whatsapp") -> str:
+        params = {"contact_id": contact_id, "text_body": message, "system": system}
+        if self._clinic_id:
+            params["clinic_id"] = self._clinic_id
+        result = self._call_tool("nm_chat_send_message", params)
+        status = result.get("status", "envoye") if isinstance(result, dict) else "envoye"
+        return format_send_confirmation(f"Chat NM ({system})", contact_id, status)
+
+    # --- NEXTMOTION LABELS ---
+
+    def labels_list(self, label_type: str | None = None) -> str:
+        if not self._clinic_id:
+            return format_error("clinic_id requis (configurer dans le profil)")
+        params = {"clinic_id": self._clinic_id}
+        if label_type:
+            params["type"] = label_type
+        result = self._call_tool("nm_object_label_list", params)
+        labels = result if isinstance(result, list) else result.get("labels", result.get("data", []))
+        return format_labels_list(labels)
+
+    # --- CALENDAR (write) ---
+
+    def calendar_update(self, event_id: str, **kwargs) -> str:
+        params = {"userId": self._user_id, "eventId": event_id}
+        for key, param in [("summary", "summary"), ("start", "startDateTime"),
+                           ("end", "endDateTime"), ("description", "description"),
+                           ("attendee", "attendeeEmail")]:
+            if key in kwargs and kwargs[key] is not None:
+                params[param] = kwargs[key]
+        self._call_tool("calendar_update_event", params)
+        return f"Evenement {event_id} mis a jour."
+
+    def calendar_delete(self, event_id: str) -> str:
+        self._call_tool("calendar_delete_event", {
+            "userId": self._user_id, "eventId": event_id,
+        })
+        return f"Evenement {event_id} supprime."
+
+    # --- CALLS (write) ---
+
+    def calls_initiate(self, phone: str | None = None,
+                       contact_id: str | None = None) -> str:
+        params = {"userId": self._user_id}
+        if phone:
+            params["phoneNumber"] = phone
+        if contact_id:
+            params["contactId"] = contact_id
+        result = self._call_tool("calls_initiate", params)
+        call_id = result.get("id", result.get("callId", "?")) if isinstance(result, dict) else "?"
+        return f"Appel lance (ID: {call_id})."
+
+    def calls_end(self, call_id: str) -> str:
+        self._call_tool("calls_end", {"callId": call_id})
+        return f"Appel {call_id} termine."
+
+    # --- CONTACTS (write) ---
+
+    def contacts_create(self, name: str, phone: str, **kwargs) -> str:
+        params = {"name": name, "phone": phone}
+        for key in ("email", "company", "notes", "phoneCountryCode"):
+            if key in kwargs and kwargs[key] is not None:
+                params[key] = kwargs[key]
+        result = self._call_tool("contacts_create", params)
+        contact_id = result.get("id", "?") if isinstance(result, dict) else "?"
+        return f"Contact cree : {name} (ID: {contact_id})."
+
+    def contacts_update(self, contact_id: str, **kwargs) -> str:
+        params = {"contactId": contact_id}
+        for key in ("name", "phone", "email", "company", "notes"):
+            if key in kwargs and kwargs[key] is not None:
+                params[key] = kwargs[key]
+        self._call_tool("contacts_update", params)
+        return f"Contact {contact_id} mis a jour."
+
 
 def handle_nextcall(command: str, args: list, profile) -> str:
     from nm.core.auth import get_credentials
@@ -580,7 +703,9 @@ def handle_nextcall(command: str, args: list, profile) -> str:
     config = profile.get_service_config("nextcall") or {}
     max_msg_len = config.get("max_message_length")
 
-    svc = NextCallService(api_key=creds["api_key"], api_url=creds["api_url"], user_id=creds["user_id"])
+    clinic_id = config.get("clinic_id")
+    svc = NextCallService(api_key=creds["api_key"], api_url=creds["api_url"],
+                          user_id=creds["user_id"], clinic_id=clinic_id)
     tracker = LimitTracker()
     user_ids_map = config.get("user_ids", {})
 
@@ -759,5 +884,117 @@ def handle_nextcall(command: str, args: list, profile) -> str:
             if a == "--title" and i + 1 < len(args):
                 title = args[i + 1]
         return svc.calendar_book(date_str, time_str, title)
+
+    elif command == "calendar.update":
+        if not args:
+            return format_error("Usage: nm nextcall calendar update <event_id> [--summary ...] [--start ...] [--end ...]")
+        return svc.calendar_update(
+            args[0],
+            summary=get_flag("summary"),
+            start=get_flag("start"),
+            end=get_flag("end"),
+            description=get_flag("description"),
+            attendee=get_flag("attendee"),
+        )
+
+    elif command == "calendar.delete":
+        if not args:
+            return format_error("Usage: nm nextcall calendar delete <event_id>")
+        return svc.calendar_delete(args[0])
+
+    elif command == "calendar.freebusy":
+        if not args:
+            return format_error("Usage: nm nextcall calendar freebusy <date YYYY-MM-DD>")
+        return svc.calendar_check(args[0])
+
+    # --- CALLS (write) ---
+    elif command == "calls.initiate":
+        if not args:
+            return format_error("Usage: nm nextcall calls initiate <phone> [--contact <id>]")
+        return svc.calls_initiate(phone=args[0], contact_id=get_flag("contact"))
+
+    elif command == "calls.end":
+        if not args:
+            return format_error("Usage: nm nextcall calls end <call_id>")
+        return svc.calls_end(args[0])
+
+    # --- CONTACTS (write) ---
+    elif command == "contacts.create":
+        if len(args) < 2:
+            return format_error('Usage: nm nextcall contacts create <name> <phone> [--email ...] [--company ...]')
+        return svc.contacts_create(
+            args[0], args[1],
+            email=get_flag("email"),
+            company=get_flag("company"),
+            notes=get_flag("notes"),
+        )
+
+    elif command == "contacts.update":
+        if not args:
+            return format_error("Usage: nm nextcall contacts update <contact_id> [--name ...] [--phone ...] [--email ...]")
+        return svc.contacts_update(
+            args[0],
+            name=get_flag("name"),
+            phone=get_flag("phone"),
+            email=get_flag("email"),
+            company=get_flag("company"),
+            notes=get_flag("notes"),
+        )
+
+    # --- NEXTMOTION PATIENTS ---
+    elif command == "patient.get":
+        if not args:
+            return format_error("Usage: nm nextcall patient get <patient_id>")
+        return svc.patient_get(args[0])
+
+    elif command == "patient.search":
+        if not args:
+            return format_error("Usage: nm nextcall patient search <nom>")
+        return svc.patient_search(" ".join(args))
+
+    # --- NEXTMOTION DEVIS ---
+    elif command == "quote.list":
+        limit_str = get_flag("limit")
+        limit = int(limit_str) if limit_str else 50
+        offset_str = get_flag("offset")
+        offset = int(offset_str) if offset_str else 0
+        return svc.quote_list(limit=limit, offset=offset)
+
+    elif command == "quote.get":
+        if not args:
+            return format_error("Usage: nm nextcall quote get <quote_id>")
+        return svc.quote_get(args[0])
+
+    elif command == "quote.update-followup":
+        if not args:
+            return format_error("Usage: nm nextcall quote update-followup <quote_id> [--next ...] [--channel ...]")
+        return svc.quote_update_followup(
+            args[0],
+            last_follow_up_time=get_flag("last"),
+            next_follow_up_time=get_flag("next"),
+            follow_up_count=int(get_flag("count")) if get_flag("count") else None,
+            last_channel_used=get_flag("channel"),
+            response_received=get_flag("responded") == "true" if get_flag("responded") else None,
+        )
+
+    # --- NEXTMOTION CHAT ---
+    elif command == "chat.send":
+        if len(args) < 2:
+            return format_error('Usage: nm nextcall chat send <contact_id> "message" [--channel whatsapp|sms|internal]')
+        contact_id = args[0]
+        msg_parts = []
+        for a in args[1:]:
+            if a.startswith("--"):
+                break
+            msg_parts.append(a)
+        message = " ".join(msg_parts)
+        channel = get_flag("channel") or "whatsapp"
+        return svc.chat_send(contact_id, message, system=channel)
+
+    # --- NEXTMOTION LABELS ---
+    elif command == "labels.list":
+        label_type = get_flag("type")
+        return svc.labels_list(label_type=label_type)
+
     else:
         return format_error(f"Commande NextCall inconnue: {command}")

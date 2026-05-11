@@ -331,3 +331,91 @@ def format_contact(contact: dict) -> str:
         for h in history[:5]:
             lines.append(f"    {h.get('date', '?')} | {h.get('channel', '?')} | {h.get('summary', '?')}")
     return "\n".join(lines)
+
+
+def format_patient(patient: dict) -> str:
+    name = f"{patient.get('first_name', '')} {patient.get('last_name', '')}".strip()
+    lines = [
+        name or "N/A",
+        f"  ID: {patient.get('id', 'N/A')}",
+        f"  Tel: {patient.get('phone', patient.get('mobile', 'N/A'))}",
+        f"  Email: {patient.get('email', 'N/A')}",
+        f"  Date naissance: {patient.get('birth_date', patient.get('birthdate', 'N/A'))}",
+        f"  Sexe: {patient.get('gender', patient.get('sex', 'N/A'))}",
+    ]
+    address = patient.get("address", "")
+    if address:
+        lines.append(f"  Adresse: {address}")
+    notes = patient.get("notes", patient.get("medical_notes", ""))
+    if notes:
+        lines.append(f"  Notes: {str(notes)[:500]}")
+    return "\n".join(lines)
+
+
+def format_quote(quote: dict) -> str:
+    patient = quote.get("patient", {})
+    patient_name = patient.get("name", patient.get("full_name", "N/A")) if isinstance(patient, dict) else str(patient)
+    lines = [
+        f"Devis #{quote.get('id', '?')}",
+        f"  Patient: {quote.get('patient_name', patient_name)}",
+        f"  Date: {quote.get('created_at', quote.get('date', 'N/A'))}",
+        f"  Montant: {quote.get('total_amount', quote.get('amount', 'N/A'))} EUR",
+        f"  Statut: {quote.get('status', 'N/A')}",
+    ]
+    treatments = quote.get("treatments", quote.get("items", []))
+    if treatments:
+        lines.append("  Traitements:")
+        for t in treatments[:10]:
+            if isinstance(t, dict):
+                name = t.get("name", t.get("treatment_name", "?"))
+                price = t.get("price", t.get("amount", "?"))
+                lines.append(f"    - {name}: {price} EUR")
+            else:
+                lines.append(f"    - {t}")
+    followup = quote.get("last_follow_up_time", "")
+    if followup:
+        lines.append(f"  Dernier suivi: {followup}")
+    next_followup = quote.get("next_follow_up_time", "")
+    if next_followup:
+        lines.append(f"  Prochain suivi: {next_followup}")
+    return "\n".join(lines)
+
+
+def format_quotes_list(quotes: list) -> str:
+    if not quotes:
+        return "Aucun devis."
+    lines = [f"{len(quotes)} devis :\n"]
+    for i, q in enumerate(quotes, 1):
+        patient = q.get("patient", {})
+        patient_name = patient.get("name", "?") if isinstance(patient, dict) else str(patient)
+        patient_name = q.get("patient_name", patient_name)
+        amount = q.get("total_amount", q.get("amount", "?"))
+        status = q.get("status", "?")
+        dt = q.get("created_at", q.get("date", "?"))
+        if isinstance(dt, str) and len(dt) > 10:
+            dt = dt[:10]
+        lines.append(f"#{i} [{dt}] {patient_name} | {amount} EUR | {status}")
+    return "\n".join(lines)
+
+
+def format_labels_list(labels: list) -> str:
+    if not labels:
+        return "Aucun label."
+    lines = [f"{len(labels)} labels :\n"]
+    for i, label in enumerate(labels, 1):
+        if isinstance(label, dict):
+            lines.append(f"  {i}. {label.get('name', label.get('label', '?'))} (ID: {label.get('id', '?')})")
+        else:
+            lines.append(f"  {i}. {label}")
+    return "\n".join(lines)
+
+
+def format_chat_contacts(contacts: list) -> str:
+    if not contacts:
+        return "Aucun contact chat."
+    lines = [f"{len(contacts)} contacts :\n"]
+    for i, c in enumerate(contacts, 1):
+        name = c.get("name", c.get("full_name", "?"))
+        phone = c.get("phone", c.get("mobile", "N/A"))
+        lines.append(f"#{i} {name} | Tel: {phone} | ID: {c.get('id', '?')}")
+    return "\n".join(lines)
