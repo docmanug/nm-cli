@@ -2,7 +2,8 @@ from __future__ import annotations
 import requests
 from nm.core.output import format_error
 
-CIRCLE_API_URL = "https://app.circle.so/api/v1"
+CIRCLE_ADMIN_URL = "https://app.circle.so/api/admin/v2"
+CIRCLE_HEADLESS_URL = "https://app.circle.so/api/headless/v1"
 
 
 class CircleService:
@@ -10,39 +11,33 @@ class CircleService:
         self._token = api_token
         self._community_id = community_id
         self._headers = {
-            "Authorization": f"Token {api_token}",
+            "Authorization": f"Bearer {api_token}",
             "Content-Type": "application/json",
         }
 
-    def _get(self, path: str, params: dict | None = None) -> dict | list:
-        all_params = params or {}
-        if self._community_id:
-            all_params["community_id"] = self._community_id
+    def _get(self, path: str, params: dict | None = None,
+             base: str = CIRCLE_ADMIN_URL) -> dict | list:
         resp = requests.get(
-            f"{CIRCLE_API_URL}{path}",
+            f"{base}{path}",
             headers=self._headers,
-            params=all_params,
+            params=params or {},
         )
         resp.raise_for_status()
         return resp.json()
 
-    def _detect_community_id(self):
-        """Auto-detect community ID from first community."""
-        if self._community_id:
-            return
-        resp = requests.get(
-            f"{CIRCLE_API_URL}/communities",
+    def _post(self, path: str, data: dict,
+              base: str = CIRCLE_HEADLESS_URL) -> dict:
+        resp = requests.post(
+            f"{base}{path}",
             headers=self._headers,
+            json=data,
         )
         resp.raise_for_status()
-        communities = resp.json()
-        if communities:
-            self._community_id = str(communities[0].get("id", ""))
+        return resp.json()
 
     def spaces_list(self) -> str:
-        self._detect_community_id()
         data = self._get("/spaces")
-        spaces = data if isinstance(data, list) else data.get("records", data.get("spaces", []))
+        spaces = data if isinstance(data, list) else data.get("records", data.get("spaces", data.get("data", [])))
         if not spaces:
             return "Aucun espace Circle."
         lines = [f"{len(spaces)} espaces :\n"]
@@ -55,23 +50,30 @@ class CircleService:
 
     def posts_list(self, space_id: str = "", limit: int = 20,
                    no_reply: bool = False) -> str:
-        self._detect_community_id()
-        params = {"per_page": limit}
+        params = {"per_page": limit, "status": "published"}
         if space_id and space_id != "all":
             params["space_id"] = space_id
-        data = self._get("/posts", params)
-        posts = data if isinstance(data, list) else data.get("records", data.get("posts", []))
+        data = self._get("/comments/posts", params)
+        posts = data if isinstance(data, list) else data.get("records", data.get("posts", data.get("data", [])))
         if no_reply:
-            posts = [p for p in posts if p.get("comments_count", 0) == 0]
+            posts = [p for p in posts if p.get("comments_count", p.get("comment_count", 0)) == 0]
         if not posts:
             return "Aucun post" + (" sans reponse" if no_reply else "") + "."
         lines = [f"{len(posts)} posts" + (" sans reponse" if no_reply else "") + " :\n"]
         for p in posts:
-            author = p.get("user_name", p.get("user", {}).get("name", "?"))
-            comments = p.get("comments_count", 0)
+            author = p.get("user_name", "")
+            if not author:
+                user = p.get("user", p.get("author", {}))
+                if isinstance(user, dict):
+                    author = user.get("name", user.get("first_name", "?"))
+            comments = p.get("comments_count", p.get("comment_count", 0))
             likes = p.get("likes_count", p.get("reactions_count", 0))
             title = p.get("name", p.get("title", "Sans titre"))
-            space = p.get("space_name", p.get("space", {}).get("name", "?"))
+            space = p.get("space_name", "")
+            if not space:
+                sp = p.get("space", {})
+                if isinstance(sp, dict):
+                    space = sp.get("name", "?")
             lines.append(
                 f"  [{p.get('id', '?')}] {title} — par {author} "
                 f"| {comments} commentaires, {likes} likes | Espace: {space}"
@@ -79,16 +81,21 @@ class CircleService:
         return "\n".join(lines)
 
     def members_list(self, recent_days: int = 0, limit: int = 20) -> str:
-        self._detect_community_id()
-        params = {"per_page": limit, "sort": "latest"}
-        data = self._get("/community_members", params)
-        members = data if isinstance(data, list) else data.get("records", data.get("members", []))
+        body = {
+            "per_page": limit,
+            "order": "latest",
+            "status": "active",
+        }
+        data = self._post("/search/community_members", body)
+        members = data.get("data", [])
+        total = data.get("total_count", len(members))
+
         if recent_days > 0:
             from datetime import datetime, timedelta
             cutoff = datetime.utcnow() - timedelta(days=recent_days)
             filtered = []
             for m in members:
-                joined = m.get("created_at", "")
+                joined = m.get("created_at", m.get("joined_at", ""))
                 if joined:
                     try:
                         dt = datetime.fromisoformat(joined.replace("Z", "+00:00"))
@@ -97,23 +104,28 @@ class CircleService:
                     except (ValueError, TypeError):
                         pass
             members = filtered
+
         if not members:
             return f"Aucun nouveau membre" + (f" (derniers {recent_days}j)" if recent_days else "") + "."
-        lines = [f"{len(members)} membres" + (f" (derniers {recent_days}j)" if recent_days else "") + " :\n"]
+        lines = [f"{len(members)} membres" + (f" (derniers {recent_days}j)" if recent_days else f" (total: {total})") + " :\n"]
         for m in members:
             name = m.get("name", m.get("first_name", "?"))
             email = m.get("email", "")
-            joined = m.get("created_at", "?")[:10] if m.get("created_at") else "?"
+            joined = (m.get("created_at", m.get("joined_at", "")) or "")[:10]
             lines.append(f"  {name} | {email} | Rejoint: {joined}")
         return "\n".join(lines)
 
     def stats(self, period_days: int = 7) -> str:
-        self._detect_community_id()
-        # Aggregate from posts and members
-        posts_data = self._get("/posts", {"per_page": 100})
-        posts = posts_data if isinstance(posts_data, list) else posts_data.get("records", [])
-        members_data = self._get("/community_members", {"per_page": 100, "sort": "latest"})
-        members = members_data if isinstance(members_data, list) else members_data.get("records", [])
+        # Get recent posts
+        params = {"per_page": 100, "status": "published"}
+        data = self._get("/comments/posts", params)
+        posts = data if isinstance(data, list) else data.get("records", data.get("data", []))
+
+        # Get recent members
+        body = {"per_page": 100, "order": "latest", "status": "active"}
+        members_data = self._post("/search/community_members", body)
+        members = members_data.get("data", [])
+        total_members = members_data.get("total_count", len(members))
 
         from datetime import datetime, timedelta
         cutoff = datetime.utcnow() - timedelta(days=period_days)
@@ -122,20 +134,20 @@ class CircleService:
         total_comments = 0
         total_likes = 0
         for p in posts:
-            created = p.get("created_at", "")
+            created = p.get("created_at", p.get("published_at", ""))
             if created:
                 try:
                     dt = datetime.fromisoformat(created.replace("Z", "+00:00"))
                     if dt.replace(tzinfo=None) >= cutoff:
                         recent_posts += 1
-                        total_comments += p.get("comments_count", 0)
+                        total_comments += p.get("comments_count", p.get("comment_count", 0))
                         total_likes += p.get("likes_count", p.get("reactions_count", 0))
                 except (ValueError, TypeError):
                     pass
 
         new_members = 0
         for m in members:
-            joined = m.get("created_at", "")
+            joined = m.get("created_at", m.get("joined_at", ""))
             if joined:
                 try:
                     dt = datetime.fromisoformat(joined.replace("Z", "+00:00"))
@@ -150,7 +162,7 @@ class CircleService:
             f"  Commentaires: {total_comments}",
             f"  Likes/reactions: {total_likes}",
             f"  Nouveaux membres: {new_members}",
-            f"  Membres totaux: {len(members)}+",
+            f"  Membres totaux: {total_members}",
         ]
         return "\n".join(lines)
 
