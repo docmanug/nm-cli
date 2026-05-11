@@ -319,8 +319,8 @@ class MondayService:
     def item_full(self, item_id: str) -> str:
         """Get full item detail with all column values."""
         data = self._query(
-            '{ items(ids: [%s]) { id name board { id name } group { id title } '
-            'column_values { id title type text value } '
+            '{ items(ids: [%s]) { id name board { id name columns { id title type } } group { id title } '
+            'column_values { id type text value } '
             'updates(limit: 3) { text_body created_at } } }'
             % item_id
         )
@@ -330,6 +330,11 @@ class MondayService:
         item = items[0]
         board = item.get("board", {})
         group = item.get("group", {})
+        # Build column ID → title map from board.columns
+        col_titles = {}
+        for c in board.get("columns", []):
+            col_titles[c["id"]] = c.get("title", c["id"])
+
         lines = [
             f"{item['name']}",
             f"  ID: {item['id']}",
@@ -342,7 +347,8 @@ class MondayService:
             text = col.get("text", "")
             raw = col.get("value", "")
             if text or raw:
-                lines.append(f"  [{col['id']}] {col.get('title', '?')} ({col['type']})")
+                title = col_titles.get(col["id"], col["id"])
+                lines.append(f"  [{col['id']}] {title} ({col['type']})")
                 lines.append(f"    text: {text}")
                 if raw and raw != text:
                     # Truncate raw JSON if too long
