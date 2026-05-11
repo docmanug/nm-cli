@@ -1,0 +1,121 @@
+name: csm-reporter
+description: Julie CSM Bot — read-only CSM activity reporting
+
+services:
+  monday:
+    boards:
+      contacts: 8379500370
+      renewal: 9299481671
+      calls: 9188247163
+      meetings: 8793493881
+      cs_dashboard: 18404571977
+
+    commands:
+      - deals.list
+      - deals.get
+      - deals.search
+      - calls.list
+      - calls.get
+      - meetings.list
+      - companies.get
+      - companies.search
+
+    column_maps:
+      contacts:
+        status: nm_lead_status
+        cs: customer_success
+        company: board_relation_mkqagmb0
+        email: contact_email
+        phone: contact_mobile
+        first_name: first_name
+        last_name: last_name
+        login_this_month: login_this_month
+        login_last_month: login_last_month
+        user_engagement: user_engagement
+        flag_login: color_mks96ew2
+        flag_patient: color_mks9ds8g
+        sequence_active: color_mm1dsg0w
+        next_step: long_text_mkqyvkvq
+        next_step_date: date_mkqynbg5
+
+      renewal:
+        deal_stage: deal_renew_pipeline
+        contract_status: color_mkrt9g56
+        proba_renewal: color_mm1gxt98
+        contract_end_date: contract_end_date
+        renewal_date: deal_close_date
+        deal_arr: deal_arr_fina
+        deal_mrr: deal_mrrfi
+        deal_tcv: deal_tcv_fina
+        company: board_relation_mkpfb3a2
+        contacts: deal_contacts
+        deal_owner: deal_owner
+        cs: deal_cus_succ
+        churned: color_mkqwdnsx
+        lost_reason: long_text_mkqtshaw
+        next_step: long_text_mkqyrfj6
+        next_step_date: date_mkqyq91x
+        tier: color_mksec0xa
+        terms: contract_terms
+
+      calls:
+        date: date_mkrj5yc4
+        heure: hour_mky7pk8f
+        duree: numeric_mkxj8z9w
+        sdr: multiple_person_mkr5rvzh
+        call_type: color_mkrtqmws
+        call_outcome: color_mkr96e32
+        linked_contact: board_relation_mm1sfp9n
+        phone: phone_mkywmge9
+        transcript_ia: text_mkr977fk
+        note_globale: text_mkrh25qc
+        feedback_global: long_text_mkrh69e0
+
+      meetings:
+        people: person
+        status: color_mkpe8p71
+        type: color_mkpeqpqt
+        contacts_relation: board_relation_mkpe7v7q
+        companies_relation: board_relation_mkzf5p36
+        titre: text_mkxjz6wy
+        start_date: date_mkpefnz4
+        end_date: date_mkpeav6m
+        duree: numeric_mkxjd0e1
+        noshow: boolean_mm1agxyn
+
+      cs_dashboard:
+        cs: text_mm1kt0xm
+        tier: text_mm1kzjma
+        arr: numeric_mm1kw4s1
+        fin_contrat: date_mm1k5rt9
+        renewal_date: date_mm1khpap
+        jours_restants: numeric_mm1kmwec
+        date_churn: date_mm1k2dvk
+        churn_status: text_mm1kyh7c
+
+    people_ids:
+      santiago: 43763993
+      yasmina: 37456201
+      emmanuel: 3299630
+
+  nextcall:
+    commands:
+      - calls.list
+      - calls.get
+      - calls.stats
+      - transcripts.list
+      - transcripts.get
+      - transcripts.recent
+      - sms.list
+      - whatsapp.list
+      - gmail.list
+      - gmail.get
+      - team.get
+      - team.list
+      - calendar.events
+      - calendar.check
+    user_ids:
+      santiago: 8c53bb5c-01f6-4707-8da9-09a496f2976d
+      yasmina: a6432a76-2c53-4ef7-bb14-bcb9deb1607b
+      emmanuel: a6178af6-2e87-4a97-9315-d95aa3eb4231
+      juliette: 4d88b171-ad39-42aa-be82-ee867c90bfb2
