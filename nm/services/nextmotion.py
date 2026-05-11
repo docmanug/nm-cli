@@ -233,6 +233,20 @@ class NextmotionService:
         pid = d.get("id", "?") if isinstance(d, dict) else "?"
         return f"Lead {lead_id} converti en patient (patient ID: {pid})."
 
+    # ---- CALLS (log) ----
+
+    def call_log(self, **kwargs) -> str:
+        data = {}
+        for key in ("patient", "phone_number", "notes", "transcript",
+                     "status", "time", "recording_url"):
+            if key in kwargs and kwargs[key] is not None:
+                data[key] = kwargs[key]
+        result = self._post(f"clinics/{self._clinic_id}/calls", data)
+        d = result.get("data", result)
+        cid = d.get("id", "?") if isinstance(d, dict) else "?"
+        phone = kwargs.get("phone_number", "?")
+        return f"Appel logue (ID: {cid}, tel: {phone})"
+
     # ---- QUOTES ----
 
     def quote_list(self, limit: int = 50) -> str:
@@ -301,15 +315,20 @@ class NextmotionService:
             params["start_date"] = start_date
         if end_date:
             params["end_date"] = end_date
-        result = self._get(f"clinics/{self._clinic_id}/visit_type_opening_hours", params)
+        result = self._get(f"clinics/{self._clinic_id}/calendar_opening_hours", params)
         slots = result.get("data", result.get("results", []))
         if not slots or not isinstance(slots, list):
             return "Aucun creneau disponible."
         lines = [f"{len(slots)} creneaux disponibles :\n"]
         for i, s in enumerate(slots, 1):
-            dt = s.get("time_slot", s.get("start_time", "?"))
-            vt = s.get("visit_type_name", s.get("visit_type", "?"))
-            lines.append(f"#{i} {dt} | {vt} | ID: {s.get('id', '?')}")
+            cal = s.get("calendar_event", {}) if isinstance(s.get("calendar_event"), dict) else {}
+            start = cal.get("start_time", s.get("start_time", "?"))
+            end = cal.get("end_time", s.get("end_time", ""))
+            docs = cal.get("doctors", [])
+            doctors = ", ".join(d.get("prefixed_name", "?") for d in docs) if isinstance(docs, list) else str(docs)
+            svts = s.get("sub_visit_types", [])
+            vt_names = ", ".join(sv.get("subject", "?") for sv in svts if isinstance(sv, dict)) if isinstance(svts, list) and svts else "Tous"
+            lines.append(f"#{i} {start} - {end} | {doctors} | {vt_names} | ID: {s.get('id', '?')}")
         return "\n".join(lines)
 
     # ---- DOCTORS ----
@@ -442,6 +461,18 @@ def handle_nextmotion(command: str, args: list, profile) -> str:
         return svc.rdv_request(
             first, last, email, phone, birth, slot, opening,
             gender=gender, doctor=get_flag("doctor"),
+        )
+
+    # ---- CALLS (log) ----
+    elif command == "call.log":
+        return svc.call_log(
+            patient=get_flag("patient"),
+            phone_number=get_flag("phone") or (args[0] if args and not args[0].startswith("--") else None),
+            notes=get_flag("notes"),
+            transcript=get_flag("transcript"),
+            status=get_flag("status"),
+            time=get_flag("time"),
+            recording_url=get_flag("recording"),
         )
 
     # ---- LEADS ----

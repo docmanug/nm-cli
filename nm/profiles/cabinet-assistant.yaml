@@ -73,6 +73,8 @@ services:
       - rdv.delete
       - rdv.reschedule
       - rdv.request
+      # Log appels
+      - call.log
       # Leads
       - lead.list
       - lead.get
