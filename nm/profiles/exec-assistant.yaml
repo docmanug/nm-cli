@@ -1,0 +1,48 @@
+name: exec-assistant
+description: Eva Executive Assistant — email triage, agenda management, deadline tracking
+
+services:
+  monday:
+    boards:
+      todolist_nm: 91564594
+
+    commands:
+      - items.list
+      - items.get
+      - search
+
+    column_maps:
+      todolist_nm:
+        status: status
+        date: date
+        texte: texte
+
+    allowed_statuses:
+      todolist_nm:
+        - Working on it
+        - Done
+        - Stuck
+        - Contrat pas encore signé
+        - Paiement en attente
+
+  nextcall:
+    commands:
+      # Gmail (read-only)
+      - gmail.list
+      - gmail.get
+      # Calendar (read-only)
+      - calendar.events
+      - calendar.check
+      # Notifications
+      - notifications.get
+      - messages.unread
+    user_ids:
+      emmanuel: a6178af6-2e87-4a97-9315-d95aa3eb4231
+
+  supabase:
+    commands:
+      - sessions.list
+      - sessions.get
+      - sessions.summaries
+      - messages.search
+      - sessions.save
