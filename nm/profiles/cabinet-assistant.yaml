@@ -72,6 +72,7 @@ services:
       - rdv.update
       - rdv.delete
       - rdv.reschedule
+      - rdv.request
       # Leads
       - lead.list
       - lead.get

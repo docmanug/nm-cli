@@ -1,6 +1,5 @@
 from __future__ import annotations
 import requests
-import json as _json
 from nm.core.output import (
     format_error,
     format_send_confirmation,
@@ -20,76 +19,63 @@ from nm.core.output import (
 
 
 class NextmotionService:
+    """Direct REST client for Nextmotion Open API v4."""
+
     def __init__(self, api_url: str, access_token: str, clinic_id: str):
-        self._api_url = api_url
-        self._access_token = access_token
+        self._base = api_url.rstrip("/")
+        self._token = access_token
         self._clinic_id = clinic_id
 
-    _rpc_id = 0
-
-    def _call_tool(self, tool: str, params: dict = None) -> dict:
-        NextmotionService._rpc_id += 1
-        payload = {
-            "jsonrpc": "2.0",
-            "id": NextmotionService._rpc_id,
-            "method": "tools/call",
-            "params": {"name": tool, "arguments": params or {}},
-        }
-        headers = {
-            "Authorization": f"Bearer {self._access_token}",
+    def _headers(self) -> dict:
+        return {
+            "Authorization": f"Bearer {self._token}",
             "Content-Type": "application/json",
+            "Accept": "application/json",
         }
-        resp = requests.post(self._api_url, headers=headers, json=payload)
+
+    def _get(self, path: str, params: dict = None) -> dict:
+        resp = requests.get(f"{self._base}/{path}", headers=self._headers(),
+                            params=params)
         resp.raise_for_status()
+        return resp.json()
 
-        text = resp.text.strip()
-        if text.startswith("event:"):
-            data_line = ""
-            for line in text.split("\n"):
-                if line.startswith("data: "):
-                    data_line = line[6:]
-            if data_line:
-                data = _json.loads(data_line)
-            else:
-                raise RuntimeError(f"SSE response without data: {text[:200]}")
-        else:
-            data = resp.json()
+    def _post(self, path: str, data: dict = None) -> dict:
+        resp = requests.post(f"{self._base}/{path}", headers=self._headers(),
+                             json=data or {})
+        resp.raise_for_status()
+        return resp.json()
 
-        if "error" in data:
-            raise RuntimeError(f"Nextmotion error: {data['error']}")
+    def _patch(self, path: str, data: dict = None) -> dict:
+        resp = requests.patch(f"{self._base}/{path}", headers=self._headers(),
+                              json=data or {})
+        resp.raise_for_status()
+        return resp.json()
 
-        result = data.get("result", data)
-        if isinstance(result, dict) and "content" in result:
-            content = result["content"]
-            if isinstance(content, list) and content:
-                text_content = content[0].get("text", "{}")
-                try:
-                    return _json.loads(text_content)
-                except (_json.JSONDecodeError, TypeError):
-                    return {"text": text_content}
-        return result
+    def _delete(self, path: str) -> dict | None:
+        resp = requests.delete(f"{self._base}/{path}", headers=self._headers())
+        resp.raise_for_status()
+        if resp.text.strip():
+            return resp.json()
+        return {}
 
     # ---- PATIENTS ----
 
     def patient_list(self, search: str | None = None, limit: int = 50) -> str:
-        params = {"clinic_id": self._clinic_id, "limit": limit}
+        params = {"limit": limit}
         if search:
             params["search"] = search
-        result = self._call_tool("oapi_clinic_patient_list", params)
-        patients = result.get("data", result) if isinstance(result, dict) else result
-        if isinstance(patients, dict):
-            patients = patients.get("data", [patients])
+        result = self._get(f"clinics/{self._clinic_id}/patients", params)
+        patients = result.get("data", result.get("results", []))
         return format_nm_patients_list(patients if isinstance(patients, list) else [])
 
     def patient_get(self, patient_id: str) -> str:
-        result = self._call_tool("oapi_patient_retrieve", {"patient_id": patient_id})
-        patient = result.get("data", result) if isinstance(result, dict) else result
+        result = self._get(f"patients/{patient_id}")
+        patient = result.get("data", result)
         return format_nm_patient(patient if isinstance(patient, dict) else {})
 
     def patient_create(self, first_name: str, last_name: str, email: str,
                        gender: int = 2, **kwargs) -> str:
-        params = {
-            "clinic_id": self._clinic_id,
+        data = {
             "first_name": first_name,
             "last_name": last_name,
             "email": email,
@@ -98,19 +84,17 @@ class NextmotionService:
         for key in ("phone_number", "birth_date", "postal_address",
                      "city", "zip_code", "doctor_comments"):
             if key in kwargs and kwargs[key] is not None:
-                params[key] = kwargs[key]
-        result = self._call_tool("oapi_clinic_patient_create", params)
-        data = result.get("data", result) if isinstance(result, dict) else result
-        pid = data.get("id", "?") if isinstance(data, dict) else "?"
-        name = f"{first_name} {last_name}"
-        return f"Patient cree : {name} (ID: {pid})"
+                data[key] = kwargs[key]
+        result = self._post(f"clinics/{self._clinic_id}/patients", data)
+        d = result.get("data", result)
+        pid = d.get("id", "?") if isinstance(d, dict) else "?"
+        return f"Patient cree : {first_name} {last_name} (ID: {pid})"
 
     def patient_update(self, patient_id: str, **kwargs) -> str:
         # Retrieve current patient to get required fields
-        current = self._call_tool("oapi_patient_retrieve", {"patient_id": patient_id})
-        data = current.get("data", current) if isinstance(current, dict) else current
-        params = {
-            "patient_id": patient_id,
+        current = self._get(f"patients/{patient_id}")
+        data = current.get("data", current)
+        patch = {
             "first_name": kwargs.get("first_name", data.get("first_name", "")),
             "last_name": kwargs.get("last_name", data.get("last_name", "")),
             "email": kwargs.get("email", data.get("email", "")),
@@ -119,36 +103,33 @@ class NextmotionService:
         for key in ("phone_number", "birth_date", "postal_address",
                      "city", "zip_code", "doctor_comments"):
             if key in kwargs and kwargs[key] is not None:
-                params[key] = kwargs[key]
-        self._call_tool("oapi_patient_update", params)
+                patch[key] = kwargs[key]
+        self._patch(f"patients/{patient_id}", patch)
         return f"Patient {patient_id} mis a jour."
 
     # ---- RDV (Appointments) ----
 
     def rdv_list(self, date_str: str | None = None,
                  patient_id: str | None = None, limit: int = 50) -> str:
-        params = {"clinic_id": self._clinic_id, "limit": limit}
+        params = {"limit": limit}
         if date_str:
             params["date"] = date_str
         if patient_id:
             params["patient"] = patient_id
-        result = self._call_tool("oapi_clinic_calendar_appointment_list", params)
-        appointments = result.get("data", result) if isinstance(result, dict) else result
-        if isinstance(appointments, dict):
-            appointments = appointments.get("data", [appointments])
+        result = self._get(f"clinics/{self._clinic_id}/calendar_appointments", params)
+        appointments = result.get("data", result.get("results", []))
         return format_nm_appointments_list(
             appointments if isinstance(appointments, list) else [],
             date_str or "",
         )
 
     def rdv_get(self, appointment_id: str) -> str:
-        result = self._call_tool("oapi_calendar_appointment_retrieve",
-                                 {"calendar_appointment_id": appointment_id})
-        data = result.get("data", result) if isinstance(result, dict) else result
+        result = self._get(f"calendar_appointments/{appointment_id}")
+        data = result.get("data", result)
         return format_nm_appointment(data if isinstance(data, dict) else {})
 
     def rdv_update(self, appointment_id: str, **kwargs) -> str:
-        params = {"calendar_appointment_id": appointment_id}
+        patch = {}
         cal_event = {}
         if kwargs.get("start_time"):
             cal_event["start_time"] = kwargs["start_time"]
@@ -159,176 +140,169 @@ class NextmotionService:
         if kwargs.get("notes"):
             cal_event["notes"] = kwargs["notes"]
         if cal_event:
-            # start_time and end_time are required for calendar_event
+            # start_time and end_time required — fetch current if missing
             if "start_time" not in cal_event or "end_time" not in cal_event:
-                # Fetch current to fill missing
-                current = self._call_tool("oapi_calendar_appointment_retrieve",
-                                          {"calendar_appointment_id": appointment_id})
-                data = current.get("data", current) if isinstance(current, dict) else current
-                event = data.get("calendar_event", {})
+                current = self._get(f"calendar_appointments/{appointment_id}")
+                data = current.get("data", current)
+                event = data.get("calendar_event", {}) if isinstance(data, dict) else {}
                 cal_event.setdefault("start_time", event.get("start_time", ""))
                 cal_event.setdefault("end_time", event.get("end_time", ""))
-            params["calendar_event"] = cal_event
+            patch["calendar_event"] = cal_event
         if kwargs.get("status"):
-            params["status"] = kwargs["status"]
+            patch["status"] = kwargs["status"]
         if kwargs.get("subject"):
-            params["subject"] = kwargs["subject"]
-        notify_email = kwargs.get("notify_email", True)
-        notify_sms = kwargs.get("notify_sms", True)
-        params["send_appointment_modified_email"] = notify_email
-        params["send_appointment_modified_sms"] = notify_sms
-        self._call_tool("oapi_calendar_appointment_update", params)
+            patch["subject"] = kwargs["subject"]
+        patch["send_appointment_modified_email"] = kwargs.get("notify_email", True)
+        patch["send_appointment_modified_sms"] = kwargs.get("notify_sms", True)
+        self._patch(f"calendar_appointments/{appointment_id}", patch)
         return f"RDV {appointment_id} mis a jour."
 
     def rdv_delete(self, appointment_id: str) -> str:
-        self._call_tool("oapi_calendar_appointment_destroy",
-                        {"calendar_appointment_id": appointment_id})
+        self._delete(f"calendar_appointments/{appointment_id}")
         return f"RDV {appointment_id} supprime."
 
     def rdv_reschedule(self, appointment_id: str, time_slot: str,
                        opening_hour_id: str) -> str:
-        self._call_tool("oapi_calendar_appointment_reschedule", {
-            "calendar_appointment_id": appointment_id,
+        self._post(f"calendar_appointments/{appointment_id}/reschedule", {
             "time_slot": time_slot,
             "visit_type_opening_hour": opening_hour_id,
         })
         return f"RDV {appointment_id} replanifie a {time_slot}."
 
+    def rdv_request(self, first_name: str, last_name: str, email: str,
+                    phone: str, birth_date: str, time_slot: str,
+                    opening_hour_id: str, **kwargs) -> str:
+        data = {
+            "first_name": first_name,
+            "last_name": last_name,
+            "email": email,
+            "phone_number": phone,
+            "birth_date": birth_date,
+            "time_slot": time_slot,
+            "visit_type_opening_hour": opening_hour_id,
+        }
+        if kwargs.get("gender") is not None:
+            data["gender"] = kwargs["gender"]
+        if kwargs.get("doctor"):
+            data["doctor"] = kwargs["doctor"]
+        result = self._post("appointment_requests", data)
+        d = result.get("data", result)
+        rid = d.get("id", "?") if isinstance(d, dict) else "?"
+        return f"Demande RDV creee : {first_name} {last_name} le {time_slot} (ID: {rid})"
+
     # ---- LEADS ----
 
     def lead_list(self, search: str | None = None, limit: int = 50) -> str:
-        params = {"clinic_id": self._clinic_id, "limit": limit}
+        params = {"limit": limit}
         if search:
             params["search"] = search
-        result = self._call_tool("oapi_clinic_lead_list", params)
-        leads = result.get("data", result) if isinstance(result, dict) else result
-        if isinstance(leads, dict):
-            leads = leads.get("data", [leads])
+        result = self._get(f"clinics/{self._clinic_id}/leads", params)
+        leads = result.get("data", result.get("results", []))
         return format_nm_leads_list(leads if isinstance(leads, list) else [])
 
     def lead_get(self, lead_id: str) -> str:
-        result = self._call_tool("oapi_lead_retrieve", {"lead_id": lead_id})
-        data = result.get("data", result) if isinstance(result, dict) else result
+        result = self._get(f"leads/{lead_id}")
+        data = result.get("data", result)
         return format_nm_lead(data if isinstance(data, dict) else {})
 
     def lead_create(self, first_name: str, last_name: str, **kwargs) -> str:
-        params = {
-            "clinic_id": self._clinic_id,
-            "first_name": first_name,
-            "last_name": last_name,
-        }
+        data = {"first_name": first_name, "last_name": last_name}
         for key in ("email", "phone_number", "source", "status",
                      "desired_treatment", "notes", "treatment_zone"):
             if key in kwargs and kwargs[key] is not None:
-                params[key] = kwargs[key]
-        result = self._call_tool("oapi_clinic_lead_create", params)
-        data = result.get("data", result) if isinstance(result, dict) else result
-        lid = data.get("id", "?") if isinstance(data, dict) else "?"
+                data[key] = kwargs[key]
+        result = self._post(f"clinics/{self._clinic_id}/leads", data)
+        d = result.get("data", result)
+        lid = d.get("id", "?") if isinstance(d, dict) else "?"
         return f"Lead cree : {first_name} {last_name} (ID: {lid})"
 
     def lead_update(self, lead_id: str, first_name: str, last_name: str,
                     **kwargs) -> str:
-        params = {
-            "lead_id": lead_id,
-            "first_name": first_name,
-            "last_name": last_name,
-        }
+        data = {"first_name": first_name, "last_name": last_name}
         for key in ("email", "phone_number", "status", "notes",
                      "is_done", "follow_up_count", "last_channel_used",
                      "response_received"):
             if key in kwargs and kwargs[key] is not None:
-                params[key] = kwargs[key]
-        self._call_tool("oapi_lead_update", params)
+                data[key] = kwargs[key]
+        self._patch(f"leads/{lead_id}", data)
         return f"Lead {lead_id} mis a jour."
 
     def lead_convert(self, lead_id: str) -> str:
-        result = self._call_tool("oapi_lead_convert_to_patient", {"lead_id": lead_id})
-        data = result.get("data", result) if isinstance(result, dict) else result
-        pid = data.get("id", "?") if isinstance(data, dict) else "?"
+        result = self._post(f"leads/{lead_id}/convert_to_patient", {})
+        d = result.get("data", result)
+        pid = d.get("id", "?") if isinstance(d, dict) else "?"
         return f"Lead {lead_id} converti en patient (patient ID: {pid})."
 
     # ---- QUOTES ----
 
     def quote_list(self, limit: int = 50) -> str:
-        params = {"clinic_id": self._clinic_id, "limit": limit}
-        result = self._call_tool("oapi_clinic_quote_list", params)
-        quotes = result.get("data", result) if isinstance(result, dict) else result
-        if isinstance(quotes, dict):
-            quotes = quotes.get("data", [quotes])
+        result = self._get(f"clinics/{self._clinic_id}/quotes", {"limit": limit})
+        quotes = result.get("data", result.get("results", []))
         return format_nm_quotes_list_native(quotes if isinstance(quotes, list) else [])
 
     def quote_get(self, quote_id: str) -> str:
-        result = self._call_tool("oapi_quote_retrieve", {"quote_id": quote_id})
-        data = result.get("data", result) if isinstance(result, dict) else result
+        result = self._get(f"quotes/{quote_id}")
+        data = result.get("data", result)
         return format_nm_quote_native(data if isinstance(data, dict) else {})
 
     def quote_update_followup(self, quote_id: str, **kwargs) -> str:
-        params = {"quote_id": quote_id}
+        data = {}
         for key in ("next_follow_up_time", "last_follow_up_time",
                      "follow_up_count", "last_channel_used",
                      "response_received", "next_step_date"):
             if key in kwargs and kwargs[key] is not None:
-                params[key] = kwargs[key]
-        self._call_tool("oapi_quote_update", params)
+                data[key] = kwargs[key]
+        self._patch(f"quotes/{quote_id}", data)
         return f"Devis {quote_id} suivi mis a jour."
 
     # ---- CHAT ----
 
     def chat_contacts(self, search: str | None = None) -> str:
-        params = {"clinic_id": self._clinic_id, "user_type": [2]}
+        params = {"user_type": 2}
         if search:
             params["search"] = search
-        result = self._call_tool("oapi_clinic_chat_contact_list", params)
-        contacts = result.get("data", result) if isinstance(result, dict) else result
-        if isinstance(contacts, dict):
-            contacts = contacts.get("data", [contacts])
+        result = self._get(f"clinics/{self._clinic_id}/chat_contacts", params)
+        contacts = result.get("data", result.get("results", []))
         return format_nm_chat_contacts_list(
             contacts if isinstance(contacts, list) else [])
 
     def chat_send(self, contact_id: str, message: str,
                   system: str = "whatsapp") -> str:
-        params = {
+        data = {
             "contact_id": contact_id,
             "text_body": message,
             "system": system,
             "clinic_id": self._clinic_id,
         }
-        self._call_tool("oapi_contact_message_create", params)
+        self._post("contact_messages", data)
         return format_send_confirmation(f"Chat NM ({system})", contact_id, "envoye")
 
     # ---- LABELS ----
 
     def labels_list(self, label_type: str | None = None) -> str:
-        params = {"clinic_id": self._clinic_id}
+        params = {}
         if label_type:
-            params["type"] = [label_type]
-        result = self._call_tool("oapi_clinic_object_label_list", params)
-        labels = result.get("data", result) if isinstance(result, dict) else result
-        if isinstance(labels, dict):
-            labels = labels.get("data", [labels])
+            params["type"] = label_type
+        result = self._get(f"clinics/{self._clinic_id}/object_labels", params)
+        labels = result.get("data", result.get("results", []))
         return format_nm_labels_list_native(labels if isinstance(labels, list) else [])
 
     # ---- VISIT TYPES & SLOTS ----
 
     def visit_types_list(self) -> str:
-        result = self._call_tool("oapi_clinic_visit_type_list",
-                                 {"clinic_id": self._clinic_id})
-        vts = result.get("data", result) if isinstance(result, dict) else result
-        if isinstance(vts, dict):
-            vts = vts.get("data", [vts])
+        result = self._get(f"clinics/{self._clinic_id}/visit_types")
+        vts = result.get("data", result.get("results", []))
         return format_nm_visit_types_list(vts if isinstance(vts, list) else [])
 
     def slots_list(self, start_date: str | None = None,
                    end_date: str | None = None) -> str:
-        params = {"clinic_id": self._clinic_id}
+        params = {}
         if start_date:
             params["start_date"] = start_date
         if end_date:
             params["end_date"] = end_date
-        result = self._call_tool("oapi_clinic_visit_type_opening_hour_list", params)
-        slots = result.get("data", result) if isinstance(result, dict) else result
-        if isinstance(slots, dict):
-            slots = slots.get("data", [slots])
+        result = self._get(f"clinics/{self._clinic_id}/visit_type_opening_hours", params)
+        slots = result.get("data", result.get("results", []))
         if not slots or not isinstance(slots, list):
             return "Aucun creneau disponible."
         lines = [f"{len(slots)} creneaux disponibles :\n"]
@@ -341,11 +315,8 @@ class NextmotionService:
     # ---- DOCTORS ----
 
     def doctor_list(self) -> str:
-        result = self._call_tool("oapi_clinic_doctor_list",
-                                 {"clinic_id": self._clinic_id})
-        doctors = result.get("data", result) if isinstance(result, dict) else result
-        if isinstance(doctors, dict):
-            doctors = doctors.get("data", [doctors])
+        result = self._get(f"clinics/{self._clinic_id}/doctors")
+        doctors = result.get("data", result.get("results", []))
         return format_nm_doctors_list(doctors if isinstance(doctors, list) else [])
 
 
@@ -452,6 +423,27 @@ def handle_nextmotion(command: str, args: list, profile) -> str:
             return format_error("Usage: nm nextmotion rdv reschedule <rdv_id> <datetime_iso> <opening_hour_id>")
         return svc.rdv_reschedule(args[0], args[1], args[2])
 
+    elif command == "rdv.request":
+        first = get_flag("first")
+        last = get_flag("last")
+        email = get_flag("email")
+        phone = get_flag("phone")
+        birth = get_flag("birth")
+        slot = get_flag("slot")
+        opening = get_flag("opening")
+        if not all([first, last, email, phone, birth, slot, opening]):
+            return format_error(
+                "Usage: nm nextmotion rdv request --first <prenom> --last <nom> "
+                "--email <email> --phone <tel> --birth <YYYY-MM-DD> "
+                "--slot <datetime_iso> --opening <opening_hour_id>"
+            )
+        gender_str = get_flag("gender")
+        gender = int(gender_str) if gender_str else None
+        return svc.rdv_request(
+            first, last, email, phone, birth, slot, opening,
+            gender=gender, doctor=get_flag("doctor"),
+        )
+
     # ---- LEADS ----
     elif command == "lead.list":
         search = get_flag("search") or (" ".join(args) if args and not args[0].startswith("--") else None)
@@ -481,8 +473,8 @@ def handle_nextmotion(command: str, args: list, profile) -> str:
         last = get_flag("last")
         if not first or not last:
             # Fetch current
-            current = svc._call_tool("oapi_lead_retrieve", {"lead_id": args[0]})
-            data = current.get("data", current) if isinstance(current, dict) else current
+            current = svc._get(f"leads/{args[0]}")
+            data = current.get("data", current)
             first = first or data.get("first_name", "")
             last = last or data.get("last_name", "")
         return svc.lead_update(
