@@ -34,7 +34,11 @@ class Profile:
         if svc is None:
             return False
         commands = svc.get("commands", [])
-        return command in commands
+        # Exact match or prefix match (e.g. "search.botox" matches "search")
+        if command in commands:
+            return True
+        cmd_base = command.split(".")[0]
+        return cmd_base in commands
 
     def get_service_config(self, service: str) -> dict | None:
         if self._is_full:
