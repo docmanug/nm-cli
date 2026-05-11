@@ -83,6 +83,15 @@ services:
       - pixel.events
     ad_account_id: act_43491791
 
+  heygen:
+    commands:
+      - avatars.list
+      - voices.list
+      - video.generate-v3
+      - video.generate-v2
+      - video.status
+      - session.status
+
   unipile:
     commands:
       - accounts.list

@@ -110,5 +110,8 @@ register_service("meta", handle_meta)
 from nm.services.unipile import handle_unipile
 register_service("unipile", handle_unipile)
 
+from nm.services.heygen import handle_heygen
+register_service("heygen", handle_heygen)
+
 from nm.services.supabase import handle_supabase
 register_service("supabase", handle_supabase)

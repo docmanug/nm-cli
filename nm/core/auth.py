@@ -41,6 +41,9 @@ SERVICE_CREDENTIALS = {
         ("N8N_API_KEY", "api_key", True),
         ("N8N_API_URL", "api_url", True),
     ],
+    "heygen": [
+        ("HEYGEN_API_KEY", "api_key", True),
+    ],
     "unipile": [
         ("UNIPILE_API_KEY", "api_key", True),
     ],
