@@ -94,7 +94,13 @@ services:
 
   supabase:
     commands:
+      # Memoire partagee (lecture)
       - sessions.list
       - sessions.get
       - sessions.summaries
       - messages.search
+      # Video tasks (queue vers Mac cabinet)
+      - video-tasks.create
+      - video-tasks.list
+      - video-tasks.get
+      - video-tasks.update

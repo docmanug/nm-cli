@@ -120,6 +120,99 @@ class SupabaseService:
             lines.append("")
         return "\n".join(lines)
 
+    # ── Video tasks (queue Anna → Mac cabinet) ──
+
+    def video_tasks_create(self, brief: str, platform: str = "instagram",
+                           source_url: str = "", style: str = "",
+                           duration: int = 0, aspect: str = "9:16",
+                           monday_item_id: str = "",
+                           created_by: str = "anna") -> str:
+        data = {
+            "brief": brief,
+            "platform": platform,
+            "status": "pending",
+            "created_by": created_by,
+            "aspect_ratio": aspect,
+        }
+        if source_url:
+            data["source_url"] = source_url
+        if style:
+            data["style"] = style
+        if duration:
+            data["target_duration"] = duration
+        if monday_item_id:
+            data["monday_item_id"] = monday_item_id
+
+        resp = requests.post(
+            f"{self._url}/rest/v1/video_tasks",
+            headers={**self._headers, "Prefer": "return=representation"},
+            json=data,
+        )
+        resp.raise_for_status()
+        result = resp.json()
+        task = result[0] if isinstance(result, list) else result
+        return f"Video task creee — ID: {task.get('id', '?')} | Platform: {platform} | Status: pending"
+
+    def video_tasks_list(self, status: str = "", limit: int = 10) -> str:
+        params = {
+            "order": "created_at.desc",
+            "limit": limit,
+            "select": "id,created_at,created_by,brief,platform,status,style,target_duration",
+        }
+        if status:
+            params["status"] = f"eq.{status}"
+        tasks = self._get("video_tasks", params)
+        if not tasks:
+            return "Aucune video task" + (f" ({status})" if status else "") + "."
+        lines = [f"{len(tasks)} video tasks :\n"]
+        for t in tasks:
+            created = (t.get("created_at", "") or "")[:16].replace("T", " ")
+            dur = f"{t.get('target_duration', '?')}s" if t.get("target_duration") else "?"
+            lines.append(
+                f"  [{t.get('status', '?')}] {t.get('brief', '?')[:80]}"
+            )
+            lines.append(
+                f"    ID: {t.get('id', '?')[:8]}... | {t.get('platform', '?')} | "
+                f"{t.get('style', '')} | {dur} | par {t.get('created_by', '?')} | {created}"
+            )
+        return "\n".join(lines)
+
+    def video_tasks_get(self, task_id: str) -> str:
+        tasks = self._get("video_tasks", {"id": f"eq.{task_id}"})
+        if not tasks:
+            return format_error(f"Video task {task_id} introuvable")
+        t = tasks[0]
+        lines = [
+            f"Video task {t.get('id', '?')}",
+            f"  Status: {t.get('status', '?')}",
+            f"  Brief: {t.get('brief', '?')}",
+            f"  Platform: {t.get('platform', '?')}",
+            f"  Style: {t.get('style', 'N/A')}",
+            f"  Duration: {t.get('target_duration', 'N/A')}s",
+            f"  Aspect: {t.get('aspect_ratio', 'N/A')}",
+            f"  Source: {t.get('source_url', 'N/A')}",
+            f"  Output: {t.get('output_url', 'N/A')}",
+            f"  Monday item: {t.get('monday_item_id', 'N/A')}",
+            f"  Created by: {t.get('created_by', '?')}",
+            f"  Created: {(t.get('created_at', '') or '')[:16]}",
+        ]
+        if t.get("error"):
+            lines.append(f"  Error: {t['error']}")
+        if t.get("processing_started_at"):
+            lines.append(f"  Processing started: {t['processing_started_at'][:16]}")
+        if t.get("processing_completed_at"):
+            lines.append(f"  Processing completed: {t['processing_completed_at'][:16]}")
+        return "\n".join(lines)
+
+    def video_tasks_update(self, task_id: str, updates: dict) -> str:
+        resp = requests.patch(
+            f"{self._url}/rest/v1/video_tasks?id=eq.{task_id}",
+            headers={**self._headers, "Prefer": "return=representation"},
+            json=updates,
+        )
+        resp.raise_for_status()
+        return f"Video task {task_id} mise a jour"
+
     def messages_search(self, query: str, days: int = 30,
                         limit: int = 10) -> str:
         """Search messages containing a keyword."""
@@ -184,6 +277,48 @@ def handle_supabase(command: str, args: list, profile) -> str:
         days = int(_flag("days") or "30")
         limit = int(_flag("limit") or "10")
         return svc.messages_search(query, days, limit)
+
+    # Video tasks
+    elif command == "video-tasks.create":
+        brief = _flag("brief")
+        if not brief and args:
+            brief = args[0]
+        if not brief:
+            return format_error('Usage: nm supabase video-tasks create --brief "..." --platform instagram [--source "url"] [--style kinetic] [--duration 30]')
+        return svc.video_tasks_create(
+            brief=brief,
+            platform=_flag("platform") or "instagram",
+            source_url=_flag("source"),
+            style=_flag("style"),
+            duration=int(_flag("duration") or "0"),
+            aspect=_flag("aspect") or "9:16",
+            monday_item_id=_flag("monday-item"),
+            created_by=_flag("by") or "anna",
+        )
+
+    elif command == "video-tasks.list":
+        status = _flag("status")
+        limit = int(_flag("limit") or "10")
+        return svc.video_tasks_list(status, limit)
+
+    elif command == "video-tasks.get":
+        if not args:
+            return format_error("Usage: nm supabase video-tasks get <task_id>")
+        return svc.video_tasks_get(args[0])
+
+    elif command == "video-tasks.update":
+        if not args:
+            return format_error("Usage: nm supabase video-tasks update <task_id> --status done [--output-url ...]")
+        task_id = args[0]
+        updates = {}
+        for field in ["status", "output-url", "output-path", "error", "notes"]:
+            val = _flag(field)
+            if val:
+                key = field.replace("-", "_")
+                updates[key] = val
+        if not updates:
+            return format_error("Rien a mettre a jour. Utiliser --status, --output-url, --error, --notes")
+        return svc.video_tasks_update(task_id, updates)
 
     else:
         return format_error(f"Commande Supabase inconnue: {command}")
