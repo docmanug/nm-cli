@@ -170,20 +170,30 @@ class NextCallService:
         if include_coaching:
             params["includeCoachingTips"] = True
         result = self._call_tool("calls_get", params)
-        call = result if isinstance(result, dict) else {}
-        contact_name = call.get("contactName", call.get("contact", {}).get("name", "?"))
+        # API wraps in {"call": {...}} or returns flat
+        if isinstance(result, dict) and "call" in result:
+            call = result["call"]
+        else:
+            call = result if isinstance(result, dict) else {}
+        contact = call.get("contact", {})
+        contact_name = contact.get("name", "?") if isinstance(contact, dict) else call.get("contactName", "?")
+        user = call.get("user", {})
+        user_name = user.get("name", "") if isinstance(user, dict) else ""
+        dt = call.get("created_at", call.get("started_at", ""))
+        if dt:
+            dt = dt[:16].replace("T", " ")
         return format_nextcall_call_detail({
             "id": call.get("id", call_id),
             "contact": contact_name,
-            "date": (call.get("date", call.get("startedAt", "?"))[:10]
-                     if call.get("date", call.get("startedAt")) else "?"),
+            "user": user_name,
+            "date": dt or "?",
             "status": call.get("status", "?"),
-            "label": call.get("label", ""),
+            "label": call.get("ai_label", call.get("label", "")),
             "duration": call.get("duration", 0),
             "direction": call.get("direction", "?"),
             "transcript": call.get("transcript", ""),
-            "summary": call.get("summary", call.get("aiSummary", "")),
-            "coaching_tips": call.get("coachingTips", []),
+            "summary": call.get("ai_summary", call.get("summary", "")),
+            "coaching_tips": call.get("coachingTips", call.get("coaching_tips", [])),
         })
 
     def calls_stats(self, user_id: str | None = None,
