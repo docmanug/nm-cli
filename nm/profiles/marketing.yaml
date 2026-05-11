@@ -92,6 +92,15 @@ services:
       - video.status
       - session.status
 
+  gdrive:
+    commands:
+      - files.list
+      - files.get
+      - files.upload
+      - files.share
+      - folders.list
+      - folders.create
+
   unipile:
     commands:
       - accounts.list

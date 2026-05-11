@@ -41,6 +41,11 @@ SERVICE_CREDENTIALS = {
         ("N8N_API_KEY", "api_key", True),
         ("N8N_API_URL", "api_url", True),
     ],
+    "gdrive": [
+        ("GDRIVE_CLIENT_ID", "client_id", True),
+        ("GDRIVE_CLIENT_SECRET", "client_secret", True),
+        ("GDRIVE_REFRESH_TOKEN", "refresh_token", True),
+    ],
     "heygen": [
         ("HEYGEN_API_KEY", "api_key", True),
     ],

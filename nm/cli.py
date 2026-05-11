@@ -113,5 +113,8 @@ register_service("unipile", handle_unipile)
 from nm.services.heygen import handle_heygen
 register_service("heygen", handle_heygen)
 
+from nm.services.gdrive import handle_gdrive
+register_service("gdrive", handle_gdrive)
+
 from nm.services.supabase import handle_supabase
 register_service("supabase", handle_supabase)
