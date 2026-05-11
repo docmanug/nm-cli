@@ -56,6 +56,10 @@ SERVICE_CREDENTIALS = {
         ("SUPABASE_URL", "url", True),
         ("SUPABASE_SERVICE_KEY", "service_key", True),
     ],
+    "knowledge": [
+        ("OPENAI_API_KEY", "api_key", True),
+        ("OPENAI_VECTOR_STORE_ID", "vector_store_id", True),
+    ],
     "nextmotion": [
         ("NEXTMOTION_API_URL", "api_url", True),
         ("NEXTMOTION_ACCESS_TOKEN", "access_token", True),

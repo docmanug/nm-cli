@@ -121,3 +121,6 @@ register_service("supabase", handle_supabase)
 
 from nm.services.nextmotion import handle_nextmotion
 register_service("nextmotion", handle_nextmotion)
+
+from nm.services.knowledge import handle_knowledge
+register_service("knowledge", handle_knowledge)
