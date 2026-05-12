@@ -477,15 +477,23 @@ class NextmotionService:
         ]
         for i, s in enumerate(slots, 1):
             ts = s.get("time_slot", "")
+            utc_offset = s.get("utc_offset", "")
             vt_oh_id = s.get("id", "")
             if "T" in ts:
                 t = ts.split("T")[1][:5]
-                h, m = t.split(":")
-                time_fmt = f"{int(h)}h{m}" if m != "00" else f"{int(h)}h"
+                h, m = int(t.split(":")[0]), int(t.split(":")[1])
+                # Apply UTC offset to get local time
+                if utc_offset:
+                    try:
+                        off_h = int(utc_offset.split(":")[0])
+                        h += off_h
+                    except (ValueError, IndexError):
+                        pass
+                time_fmt = f"{h}h{m:02d}" if m != 0 else f"{h}h"
             else:
                 time_fmt = ts
             lines.append(
-                f"  {i}. {time_fmt} | visit_type_opening_hour_id: {vt_oh_id}"
+                f"  {i}. {time_fmt} | time_slot: {ts} | visit_type_opening_hour_id: {vt_oh_id}"
             )
         return "\n".join(lines)
 
