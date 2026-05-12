@@ -445,26 +445,14 @@ class NextmotionService:
                     filtered.append(slot)
             raw_slots = filtered if filtered else raw_slots
 
-        # 3. Get existing appointments for the date
-        appts_result = self._get(
-            f"clinics/{self._clinic_id}/calendar_appointments",
-            {"date": date_str, "limit": 100},
-        )
-        raw_appts = appts_result.get("data", appts_result.get("results", []))
-        if not isinstance(raw_appts, list):
-            raw_appts = []
-
-        # Check for absence: if ALL appointments are suspended, day is blocked
-        if raw_appts:
-            all_suspended = all(
-                (a.get("status") or "").lower() == "suspended"
-                for a in raw_appts
+        # 3. Get absences for the date
+        try:
+            abs_result = self._get(
+                f"clinics/{self._clinic_id}/calendar_absences",
             )
-            if all_suspended:
-                return (
-                    f"Le cabinet est en absence le {date_str}. "
-                    f"Tous les RDV sont suspendus. Essayez une autre date."
-                )
+            raw_absences = abs_result.get("data", abs_result.get("results", []))
+        except Exception:
+            raw_absences = []
 
         def parse_local(t: str, target_date_str: str) -> datetime | None:
             if not t:
@@ -478,8 +466,60 @@ class NextmotionService:
             except ValueError:
                 return None
 
-        # Parse busy intervals from existing appointments
-        busy = []
+        # Check absences that overlap with the requested date
+        absence_busy = []
+        for ab in (raw_absences if isinstance(raw_absences, list) else []):
+            ev = ab.get("calendar_event", {}) or {}
+            abs_start_str = ev.get("start_time", "")
+            abs_end_str = ev.get("end_time", "")
+            if not abs_start_str or not abs_end_str:
+                continue
+            try:
+                abs_start = datetime.fromisoformat(abs_start_str.replace("Z", ""))
+                abs_end = datetime.fromisoformat(abs_end_str.replace("Z", ""))
+            except ValueError:
+                continue
+            # Check if absence overlaps with requested date
+            day_start = datetime.strptime(f"{date_str}T00:00", "%Y-%m-%dT%H:%M")
+            day_end = datetime.strptime(f"{date_str}T23:59", "%Y-%m-%dT%H:%M")
+            if abs_start <= day_end and abs_end >= day_start:
+                # Clamp to day boundaries and add as busy
+                clamped_start = max(abs_start, day_start)
+                clamped_end = min(abs_end, day_end)
+                s = parse_local(clamped_start.isoformat(), date_str)
+                e = parse_local(clamped_end.isoformat(), date_str)
+                if s and e:
+                    absence_busy.append((s, e))
+
+        # Full-day absence: if absence covers all opening hours, day is blocked
+        if absence_busy:
+            for slot in raw_slots:
+                cal = slot.get("calendar_event", {}) or {}
+                ss = parse_local(cal.get("start_time", ""), date_str)
+                se = parse_local(cal.get("end_time", ""), date_str)
+                if ss and se:
+                    all_covered = any(
+                        ab_s <= ss and ab_e >= se for ab_s, ab_e in absence_busy
+                    )
+                    if not all_covered:
+                        break
+            else:
+                return (
+                    f"Le Docteur Elard est absent le {date_str}. "
+                    f"Essayez une autre date."
+                )
+
+        # 4. Get existing appointments for the date
+        appts_result = self._get(
+            f"clinics/{self._clinic_id}/calendar_appointments",
+            {"date": date_str, "limit": 100},
+        )
+        raw_appts = appts_result.get("data", appts_result.get("results", []))
+        if not isinstance(raw_appts, list):
+            raw_appts = []
+
+        # Parse busy intervals from appointments + absences
+        busy = list(absence_busy)
         for a in raw_appts:
             status = (a.get("status") or "").lower()
             if status in ("cancelled", "canceled", "no_show", "suspended"):
