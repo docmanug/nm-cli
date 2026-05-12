@@ -615,3 +615,49 @@ def format_nm_chat_contacts_list(contacts: list) -> str:
         if last_text:
             lines.append(f"    Dernier msg: {last_text}")
     return "\n".join(lines)
+
+
+def format_enrich_result(result: dict) -> str:
+    lead_name = result.get("name", "?")
+    lines = [f"Enrichissement: {lead_name}"]
+    filled = result.get("filled_columns", [])
+    if filled:
+        lines.append(f"  Colonnes remplies: {', '.join(filled)}")
+    skipped = result.get("skipped_columns", [])
+    if skipped:
+        lines.append(f"  Colonnes ignorees (deja remplies): {', '.join(skipped)}")
+    errors = result.get("errors", [])
+    if errors:
+        lines.append(f"  Erreurs: {', '.join(errors)}")
+    briefing = result.get("briefing", "")
+    if briefing:
+        lines.append(f"\n{briefing}")
+    return "\n".join(lines)
+
+
+def format_enrich_batch(results: list) -> str:
+    total = len(results)
+    success = sum(1 for r in results if not r.get("errors"))
+    errors = sum(1 for r in results if r.get("errors"))
+    already = sum(1 for r in results if r.get("already_enriched"))
+    lines = [
+        f"Batch enrichissement: {total} leads traites",
+        f"  Enrichis: {success}",
+        f"  Erreurs: {errors}",
+        f"  Deja enrichis: {already}",
+    ]
+    return "\n".join(lines)
+
+
+def format_enrich_status(status: dict) -> str:
+    enriched = status.get("enriched", False)
+    lines = [
+        f"Lead {status.get('name', '?')}: {'Enrichi' if enriched else 'Non enrichi'}",
+    ]
+    filled = status.get("filled", [])
+    empty = status.get("empty", [])
+    if filled:
+        lines.append(f"  Rempli: {', '.join(filled)}")
+    if empty:
+        lines.append(f"  Vide: {', '.join(empty)}")
+    return "\n".join(lines)
