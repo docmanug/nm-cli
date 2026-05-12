@@ -67,6 +67,9 @@ SERVICE_CREDENTIALS = {
     "enrich": [
         ("CRAWL4AI_URL", "crawl4ai_url", False),
     ],
+    "mailerlite": [
+        ("MAILERLITE_API_KEY", "api_key", True),
+    ],
 }
 
 

@@ -125,6 +125,9 @@ register_service("nextmotion", handle_nextmotion)
 from nm.services.knowledge import handle_knowledge
 register_service("knowledge", handle_knowledge)
 
+from nm.services.mailerlite import handle_mailerlite
+register_service("mailerlite", handle_mailerlite)
+
 try:
     from nm.services.enrich import handle_enrich
     register_service("enrich", handle_enrich)
