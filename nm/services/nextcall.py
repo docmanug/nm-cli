@@ -138,7 +138,7 @@ class NextCallService:
             params["userId"] = user_id
         if days and not date_from:
             date_from = (date.today() - timedelta(days=days)).isoformat()
-            date_to = date.today().isoformat()
+            date_to = (date.today() + timedelta(days=1)).isoformat()
         if date_from:
             params["dateFrom"] = date_from
         if date_to:
@@ -213,7 +213,7 @@ class NextCallService:
         if days and not date_from:
 
             date_from = (date.today() - timedelta(days=days)).isoformat()
-            date_to = date.today().isoformat()
+            date_to = (date.today() + timedelta(days=1)).isoformat()
         if date_from:
             params["dateFrom"] = date_from
         if date_to:
@@ -233,7 +233,7 @@ class NextCallService:
         if days and not date_from:
 
             date_from = (date.today() - timedelta(days=days)).isoformat()
-            date_to = date.today().isoformat()
+            date_to = (date.today() + timedelta(days=1)).isoformat()
         if date_from:
             params["dateFrom"] = date_from
         if date_to:
@@ -358,7 +358,7 @@ class NextCallService:
             params["contactId"] = contact_id
         if days and not date_from:
             date_from = (date.today() - timedelta(days=days)).isoformat()
-            date_to = date.today().isoformat()
+            date_to = (date.today() + timedelta(days=1)).isoformat()
         if date_from:
             params["dateFrom"] = date_from
         if date_to:
@@ -392,7 +392,7 @@ class NextCallService:
             params["contactId"] = contact_id
         if days and not date_from:
             date_from = (date.today() - timedelta(days=days)).isoformat()
-            date_to = date.today().isoformat()
+            date_to = (date.today() + timedelta(days=1)).isoformat()
         if date_from:
             params["dateFrom"] = date_from
         if date_to:
