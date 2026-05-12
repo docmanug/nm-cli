@@ -41,6 +41,7 @@ class NextCallService:
         }
         resp = requests.post(self._api_url, headers=headers, json=payload)
         resp.raise_for_status()
+        resp.encoding = "utf-8"
 
         # Response may be SSE (event: message\ndata: {...}) or plain JSON
         try:
