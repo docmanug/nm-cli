@@ -116,15 +116,23 @@ def search_urls(query: str, max_results: int = 5) -> list[dict]:
 
 
 def scrape_page(url: str, crawl4ai_url: str = "http://localhost:11235",
-                timeout: int = 30) -> str:
+                timeout: int = 30, api_token: str = "") -> str:
     """POST url to Crawl4AI HTTP endpoint and return markdown content.
 
-    Uses the official Crawl4AI REST API (POST /crawl on port 11235).
+    Uses the official Crawl4AI REST API (async: POST /crawl → task_id → GET /task/{id}).
     Returns "" on any failure.
     """
+    import time
+
+    headers = {"Content-Type": "application/json"}
+    if api_token:
+        headers["Authorization"] = f"Bearer {api_token}"
+
     try:
+        # Step 1: Submit crawl task
         resp = requests.post(
             f"{crawl4ai_url}/crawl",
+            headers=headers,
             json={
                 "urls": [url],
                 "browser_config": {
@@ -140,16 +148,34 @@ def scrape_page(url: str, crawl4ai_url: str = "http://localhost:11235",
         )
         resp.raise_for_status()
         data = resp.json()
-        # Response contains a list of results
-        if isinstance(data, list) and data:
-            return data[0].get("markdown") or data[0].get("html", "")
-        if isinstance(data, dict):
-            result = data.get("result") or data.get("results", [{}])
-            if isinstance(result, list) and result:
-                return result[0].get("markdown") or ""
-            if isinstance(result, dict):
-                return result.get("markdown") or ""
-        return ""
+        task_id = data.get("task_id", "")
+        if not task_id:
+            # Synchronous response — try to extract directly
+            results = data.get("results", data.get("result", []))
+            if isinstance(results, list) and results:
+                return results[0].get("markdown") or results[0].get("cleaned_html", "")
+            return ""
+
+        # Step 2: Poll for result
+        deadline = time.time() + timeout
+        while time.time() < deadline:
+            time.sleep(2)
+            poll = requests.get(
+                f"{crawl4ai_url}/task/{task_id}",
+                headers=headers,
+                timeout=10,
+            )
+            poll.raise_for_status()
+            task_data = poll.json()
+            status = task_data.get("status", "")
+            if status == "completed":
+                results = task_data.get("results", [])
+                if results:
+                    return results[0].get("markdown") or results[0].get("cleaned_html", "")
+                return ""
+            if status == "failed":
+                return ""
+        return ""  # timeout
     except Exception:
         return ""
 
@@ -289,14 +315,16 @@ class EnrichService:
     def __init__(
         self,
         monday_svc: MondayService,
-        crawl4ai_url: str = "http://localhost:8002",
+        crawl4ai_url: str = "http://localhost:11235",
         timeout: int = 30,
         max_results: int = 5,
+        api_token: str = "",
     ):
         self._monday = monday_svc
         self._crawl4ai_url = crawl4ai_url
         self._timeout = timeout
         self._max_results = max_results
+        self._api_token = api_token
 
     def _col_map(self, board_name: str) -> dict:
         return _BOARD_COLUMNS.get(board_name, ENRICHMENT_COLUMNS_FR_LEADS)
@@ -442,7 +470,8 @@ class EnrichService:
         # --- Step 4: scrape found URLs ---
         for key, url in urls_to_use.items():
             content = scrape_page(url, crawl4ai_url=self._crawl4ai_url,
-                                  timeout=self._timeout)
+                                  timeout=self._timeout,
+                                  api_token=self._api_token)
             if content:
                 all_content.append(content)
 
@@ -607,7 +636,10 @@ def handle_enrich(command: str, args: list, profile) -> str:
     )
 
     crawl4ai_url = enrich_creds.get("crawl4ai_url") or enrich_config.get(
-        "crawl4ai_url", "http://localhost:8002"
+        "crawl4ai_url", "http://localhost:11235"
+    )
+    api_token = enrich_creds.get("crawl4ai_api_token") or enrich_config.get(
+        "crawl4ai_api_token", ""
     )
     timeout = int(enrich_config.get("timeout", 30))
     max_results = int(enrich_config.get("max_results", 5))
@@ -617,6 +649,7 @@ def handle_enrich(command: str, args: list, profile) -> str:
         crawl4ai_url=crawl4ai_url,
         timeout=timeout,
         max_results=max_results,
+        api_token=api_token,
     )
 
     # Helpers
