@@ -290,19 +290,22 @@ def format_nextcall_call_stats(stats: dict) -> str:
 
 
 def format_meeting_transcript(transcript: dict) -> str:
+    participants = transcript.get("participants", [])
+    if participants and isinstance(participants[0], dict):
+        participants = [p.get("name", p.get("email", str(p))) for p in participants]
     lines = [
         f"Transcript #{transcript.get('id', '?')}",
         f"  Titre: {transcript.get('title', 'N/A')}",
         f"  Date: {transcript.get('date', 'N/A')}",
-        f"  Participants: {', '.join(transcript.get('participants', []))}",
+        f"  Participants: {', '.join(str(p) for p in participants)}",
         f"  Statut: {transcript.get('status', 'N/A')}",
     ]
     summary = transcript.get("summary", "")
     if summary:
-        lines.append(f"  Resume: {summary}")
+        lines.append(f"  Resume: {str(summary)[:3000]}")
     text = transcript.get("transcript", "")
     if text:
-        lines.append(f"  Transcript:\n    {text[:3000]}")
+        lines.append(f"  Transcript:\n    {str(text)[:3000]}")
     return "\n".join(lines)
 
 
