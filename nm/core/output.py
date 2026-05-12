@@ -459,12 +459,32 @@ def format_nm_patients_list(patients: list) -> str:
     return "\n".join(lines)
 
 
+def _utc_to_local(time_str: str, event: dict) -> str:
+    """Convert UTC time string to local time using utc_offset from event."""
+    if not time_str or not isinstance(time_str, str) or "T" not in time_str:
+        return time_str or "?"
+    hhmm = time_str.split("T")[1][:5]
+    try:
+        h, m = int(hhmm.split(":")[0]), int(hhmm.split(":")[1])
+        offset_s = event.get("start_time_utc_offset_seconds", 0)
+        if offset_s:
+            h += offset_s // 3600
+        elif event.get("start_time_utc_offset"):
+            off = event["start_time_utc_offset"]
+            h += int(off.split(":")[0])
+        else:
+            h += 2  # Default Paris CEST
+        return f"{h:02d}:{m:02d}"
+    except (ValueError, IndexError):
+        return hhmm
+
+
 def format_nm_appointment(a: dict) -> str:
     event = a.get("calendar_event", {})
     patient = a.get("patient", {})
     patient_name = f"{patient.get('first_name', '')} {patient.get('last_name', '')}".strip() if isinstance(patient, dict) else str(patient)
-    start = event.get("start_time", "?")
-    end = event.get("end_time", "?")
+    start = _utc_to_local(event.get("start_time", ""), event)
+    end = _utc_to_local(event.get("end_time", ""), event)
     lines = [
         f"RDV #{a.get('id', '?')}",
         f"  Patient: {patient_name or 'N/A'}",
@@ -488,12 +508,8 @@ def format_nm_appointments_list(appointments: list, date_str: str = "") -> str:
         event = a.get("calendar_event", {})
         patient = a.get("patient", {})
         patient_name = f"{patient.get('first_name', '')} {patient.get('last_name', '')}".strip() if isinstance(patient, dict) else "?"
-        start = event.get("start_time", "?")
-        if isinstance(start, str) and "T" in start:
-            start = start[11:16]
-        end = event.get("end_time", "?")
-        if isinstance(end, str) and "T" in end:
-            end = end[11:16]
+        start = _utc_to_local(event.get("start_time", ""), event)
+        end = _utc_to_local(event.get("end_time", ""), event)
         status = a.get("status", "?")
         subject = a.get("subject", "")
         lines.append(f"#{i} {start}-{end} {patient_name} | {subject} | {status} | ID: {a.get('id', '?')}")
