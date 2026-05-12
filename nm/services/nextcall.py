@@ -524,13 +524,13 @@ class NextCallService:
                         days: int | None = None) -> str:
         if not date_str:
             date_str = date.today().isoformat()
-        time_min = f"{date_str}T00:00:00"
+        time_min = f"{date_str}T00:00:00Z"
         if days:
             end_date = (datetime.strptime(date_str, "%Y-%m-%d").date()
                         + timedelta(days=days)).isoformat()
         else:
             end_date = date_str
-        time_max = f"{end_date}T23:59:59"
+        time_max = f"{end_date}T23:59:59Z"
 
         result = self._call_tool("calendar_events", {
             "userId": user_id,
