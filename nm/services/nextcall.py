@@ -252,16 +252,25 @@ class NextCallService:
         return format_meeting_transcripts_list(items)
 
     def meeting_transcripts_get(self, transcript_id: str) -> str:
+        import json as _json
         result = self._call_tool("meeting_transcripts_get", {"id": transcript_id})
         t = result if isinstance(result, dict) else {}
-        # API returns transcript_entries (list or JSON string), not transcript
-        entries = t.get("transcript_entries", t.get("transcript", t.get("text", "")))
-        if isinstance(entries, str):
+
+        # If _call_tool returned {"text": "<json string>"}, re-parse the inner JSON
+        if list(t.keys()) == ["text"] and isinstance(t.get("text"), str):
             try:
-                import json as _json
+                t = _json.loads(t["text"])
+            except (ValueError, TypeError):
+                pass
+
+        # Extract transcript entries — may be JSON string or list
+        entries = t.get("transcript_entries", t.get("transcript", ""))
+        if isinstance(entries, str) and entries:
+            try:
                 entries = _json.loads(entries)
             except (ValueError, TypeError):
                 pass
+
         return format_meeting_transcript({
             "id": t.get("id", transcript_id),
             "title": t.get("title", "?"),
