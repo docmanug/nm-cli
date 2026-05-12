@@ -291,8 +291,14 @@ def format_nextcall_call_stats(stats: dict) -> str:
 
 def format_meeting_transcript(transcript: dict) -> str:
     participants = transcript.get("participants", [])
+    if isinstance(participants, str):
+        try:
+            import json
+            participants = json.loads(participants)
+        except (ValueError, TypeError):
+            participants = []
     if participants and isinstance(participants[0], dict):
-        participants = [p.get("name", p.get("email", str(p))) for p in participants]
+        participants = [p.get("displayName", p.get("name", p.get("email", str(p)))) for p in participants]
     lines = [
         f"Transcript #{transcript.get('id', '?')}",
         f"  Titre: {transcript.get('title', 'N/A')}",
