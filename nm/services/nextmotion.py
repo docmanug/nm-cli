@@ -339,30 +339,16 @@ class NextmotionService:
 
     # ---- FIND AVAILABLE SLOTS ----
 
-    # Common patient terms → medical terms (fallback for fuzzy match)
-    _ALIASES = {
-        "botox": "toxine botulique",
-        "filler": "acide hyaluronique",
-        "rides": "injections",
-        "ultrasons": "hifu",
-        "cryo": "cryolipolyse",
-        "meso": "mésothérapie",
-        "radiofréquence": "radiofréquence",
-        "radiofrequence": "radiofréquence",
-        "peeling": "peeling",
-        "led": "lampe led",
-    }
-
     def _match_sub_visit_type(self, query: str) -> tuple[str | None, str]:
-        """Fuzzy-match patient query against actual sub_visit_types in NM.
+        """Use LLM to match patient query to actual NM sub_visit_types.
 
-        Returns (sub_visit_type_id or None, matched_name).
+        Fetches the clinic's sub_visit_types, sends them + query to
+        gpt-4o-mini for semantic matching. Returns (id, name).
         """
-        query_lower = query.lower().strip()
-        if not query_lower:
+        if not query or not query.strip():
             return None, query
 
-        # Fetch all sub_visit_types from clinic
+        # Fetch all sub_visit_types
         try:
             result = self._get(f"clinics/{self._clinic_id}/sub_visit_types")
             svts = result.get("data", result.get("results", []))
@@ -371,41 +357,63 @@ class NextmotionService:
         if not isinstance(svts, list) or not svts:
             return None, query
 
-        names = []
+        entries = []
         for svt in svts:
             name = svt.get("subject") or svt.get("name") or ""
             sid = svt.get("id", "")
-            if name:
-                names.append((name, sid))
+            if name and sid:
+                entries.append({"id": sid, "name": name})
+        if not entries:
+            return None, query
 
-        # Expand aliases: "botox" → also try "toxine botulique"
-        search_terms = [query_lower]
-        alias = self._ALIASES.get(query_lower)
-        if alias:
-            search_terms.append(alias.lower())
+        # Build LLM prompt
+        options = "\n".join(f"- {e['id']} | {e['name']}" for e in entries)
+        prompt = (
+            f"Le patient demande : \"{query}\"\n\n"
+            f"Voici les motifs de consultation disponibles :\n{options}\n\n"
+            f"Quel motif correspond le mieux a la demande du patient ?\n"
+            f"Reponds UNIQUEMENT avec l'ID (UUID), rien d'autre.\n"
+            f"Si aucun motif ne correspond, reponds : NONE"
+        )
 
-        # 1. Exact substring match (try original + alias)
-        for term in search_terms:
-            for name, sid in names:
-                nl = name.lower()
-                if term in nl or nl in term:
-                    return sid, name
+        # Call OpenAI gpt-4o-mini
+        import os
+        api_key = os.environ.get("OPENAI_API_KEY")
+        if not api_key:
+            from nm.core.auth import get_credentials
+            try:
+                k_creds = get_credentials("knowledge")
+                api_key = k_creds.get("api_key")
+            except SystemExit:
+                pass
+        if not api_key:
+            return None, query
 
-        # 2. Keyword match (best score, try original + alias)
-        all_keywords = set()
-        for term in search_terms:
-            all_keywords.update(term.split())
-        best_score, best_name, best_id = 0, None, None
-        for name, sid in names:
-            nl = name.lower()
-            score = sum(1 for kw in all_keywords if kw in nl)
-            if score > best_score:
-                best_score, best_name, best_id = score, name, sid
+        try:
+            resp = requests.post(
+                "https://api.openai.com/v1/chat/completions",
+                headers={"Authorization": f"Bearer {api_key}"},
+                json={
+                    "model": "gpt-4o-mini",
+                    "messages": [{"role": "user", "content": prompt}],
+                    "max_tokens": 50,
+                    "temperature": 0,
+                },
+                timeout=5,
+            )
+            resp.raise_for_status()
+            answer = resp.json()["choices"][0]["message"]["content"].strip()
+        except Exception:
+            return None, query
 
-        if best_name and best_score > 0:
-            return best_id, best_name
+        if answer == "NONE" or len(answer) < 10:
+            return None, query
 
-        # 3. No match — return query as-is, let the API try
+        # Find the matched entry
+        for e in entries:
+            if e["id"] == answer:
+                return e["id"], e["name"]
+
         return None, query
 
     def find_available_slots(self, visit_type_query: str, date_str: str,
