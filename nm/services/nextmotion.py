@@ -43,7 +43,12 @@ class NextmotionService:
     def _post(self, path: str, data: dict = None) -> dict:
         resp = requests.post(f"{self._base}/{path}", headers=self._headers(),
                              json=data or {})
-        resp.raise_for_status()
+        if not resp.ok:
+            detail = resp.text[:500] if resp.text else ""
+            raise requests.HTTPError(
+                f"{resp.status_code} {resp.reason} for url: {resp.url} — {detail}",
+                response=resp,
+            )
         return resp.json()
 
     def _patch(self, path: str, data: dict = None) -> dict:
