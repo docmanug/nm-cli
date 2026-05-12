@@ -378,31 +378,21 @@ class NextmotionService:
 
         # Call OpenAI gpt-4o-mini
         import os
-        api_key = os.environ.get("OPENAI_API_KEY")
-        if not api_key:
-            from nm.core.auth import get_credentials
-            try:
-                k_creds = get_credentials("knowledge")
-                api_key = k_creds.get("api_key")
-            except SystemExit:
-                pass
+        api_key = os.environ.get("GEMINI_API_KEY")
         if not api_key:
             return None, query
 
         try:
             resp = requests.post(
-                "https://api.openai.com/v1/chat/completions",
-                headers={"Authorization": f"Bearer {api_key}"},
+                f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={api_key}",
                 json={
-                    "model": "gpt-4o-mini",
-                    "messages": [{"role": "user", "content": prompt}],
-                    "max_tokens": 50,
-                    "temperature": 0,
+                    "contents": [{"parts": [{"text": prompt}]}],
+                    "generationConfig": {"temperature": 0, "maxOutputTokens": 50},
                 },
                 timeout=5,
             )
             resp.raise_for_status()
-            answer = resp.json()["choices"][0]["message"]["content"].strip()
+            answer = resp.json()["candidates"][0]["content"]["parts"][0]["text"].strip()
         except Exception:
             return None, query
 
