@@ -149,6 +149,25 @@ services:
       - video-tasks.get
       - video-tasks.update
 
+  mailerlite:
+    commands:
+      - subscribers.count
+      - subscribers.search
+      - subscriber.get
+      - subscriber.add
+      - groups.list
+      - group.subscribers
+      - group.add-subscriber
+      - campaigns.list
+      - campaign.get
+      - automations.list
+      - automation.get
+      - segments.list
+      - forms.list
+      - fields.list
+    limits:
+      subscriber_adds: 50
+
   enrich:
     commands:
       - lead
