@@ -129,6 +129,11 @@ services:
       - post.comments
       - post.reactions
       - posts.list
+      - post.comment
+      - comment.reply
+      - post.react
+      - post.unreact
+      - comment.react
 
   supabase:
     commands:
