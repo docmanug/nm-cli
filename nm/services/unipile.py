@@ -237,7 +237,7 @@ class UnipileService:
         payload = {
             "account_id": account_id,
             "text": text,
-            "in_reply_to": comment_id,
+            "comment_id": comment_id,
         }
         data = self._post(f"/api/v1/posts/{post_id}/comments", payload)
         reply_id = data.get("id", data.get("comment_id", "?"))
@@ -248,6 +248,40 @@ class UnipileService:
             f"  Compte: {account_id}\n"
             f"  Reply ID: {reply_id}\n"
             f"  Texte: {text[:100]}{'...' if len(text) > 100 else ''}"
+        )
+
+    def post_react(self, post_id: str, reaction_type: str = "like", account_id: str | None = None) -> str:
+        account_id = self._resolve_account_id(account_id)
+        payload = {
+            "account_id": account_id,
+            "post_id": post_id,
+            "reaction_type": reaction_type,
+        }
+        data = self._post("/api/v1/posts/reaction", payload)
+        return (
+            f"Reaction ajoutee\n"
+            f"  Post: {post_id}\n"
+            f"  Compte: {account_id}\n"
+            f"  Type: {reaction_type}\n"
+            f"  Reponse: {data.get('object', data)}"
+        )
+
+    def comment_react(self, post_id: str, comment_id: str, reaction_type: str = "like", account_id: str | None = None) -> str:
+        account_id = self._resolve_account_id(account_id)
+        payload = {
+            "account_id": account_id,
+            "post_id": post_id,
+            "comment_id": comment_id,
+            "reaction_type": reaction_type,
+        }
+        data = self._post("/api/v1/posts/reaction", payload)
+        return (
+            f"Reaction ajoutee sur commentaire\n"
+            f"  Post: {post_id}\n"
+            f"  Commentaire: {comment_id}\n"
+            f"  Compte: {account_id}\n"
+            f"  Type: {reaction_type}\n"
+            f"  Reponse: {data.get('object', data)}"
         )
 
     def user_posts(self, limit: int = 20, account_id: str | None = None) -> str:
@@ -404,17 +438,59 @@ def handle_unipile(command: str, args: list, profile) -> str:
             )
         return svc.comment_reply(post_id, comment_id_arg, text, account_id=account_id)
 
-    elif command in ("post.react", "post.unreact", "comment.react"):
+    elif command == "post.react":
+        if not args:
+            return format_error(
+                "Usage: nm unipile post react <post_id_or_url> [--type like] [--account-id <id>] --confirm"
+            )
+        try:
+            post_id = _resolve_post_id(args[0])
+        except ValueError as e:
+            return format_error(str(e))
+        reaction_type = _parse_flag(args, "type") or "like"
+        resolved_account = account_id or svc._resolve_account_id(None)
+        if not _has_flag(args, "confirm"):
+            return (
+                f"DRY RUN — reaction non publiee\n"
+                f"  Endpoint: POST /api/v1/posts/reaction\n"
+                f"  Account ID: {resolved_account}\n"
+                f"  Post: {post_id}\n"
+                f"  Type: {reaction_type}\n"
+                f"\n  Ajoutez --confirm pour reagir reellement."
+            )
+        return svc.post_react(post_id, reaction_type, account_id=account_id)
+
+    elif command == "post.unreact":
         return format_error(
-            "Reactions/likes non disponibles via l'API Unipile.\n"
-            "  Endpoints testes (tous 404) :\n"
-            "    POST /api/v1/posts/{id}/reactions\n"
-            "    POST /api/v1/posts/{id}/react\n"
-            "    DELETE /api/v1/posts/{id}/reactions\n"
-            "  L'API retourne permissions.can_react dans les objets post,\n"
-            "  mais n'expose pas d'endpoint d'ecriture pour les reactions.\n"
-            "  Teste le 2026-05-12 sur api23.unipile.com:15390."
+            "Unreact non disponible via l'API Unipile.\n"
+            "  Aucun endpoint DELETE pour les reactions n'est documente.\n"
+            "  Pour retirer une reaction, le faire manuellement sur LinkedIn/Instagram."
         )
+
+    elif command == "comment.react":
+        comment_id_arg = _parse_flag(args, "comment-id") or (args[0] if args else "")
+        post_id_raw = _parse_flag(args, "post-id")
+        if not comment_id_arg or not post_id_raw:
+            return format_error(
+                "Usage: nm unipile comment react <comment_id> --post-id <post_id> [--type like] [--account-id <id>] --confirm"
+            )
+        try:
+            post_id = _resolve_post_id(post_id_raw)
+        except ValueError as e:
+            return format_error(str(e))
+        reaction_type = _parse_flag(args, "type") or "like"
+        resolved_account = account_id or svc._resolve_account_id(None)
+        if not _has_flag(args, "confirm"):
+            return (
+                f"DRY RUN — reaction commentaire non publiee\n"
+                f"  Endpoint: POST /api/v1/posts/reaction\n"
+                f"  Account ID: {resolved_account}\n"
+                f"  Post: {post_id}\n"
+                f"  Commentaire: {comment_id_arg}\n"
+                f"  Type: {reaction_type}\n"
+                f"\n  Ajoutez --confirm pour reagir reellement."
+            )
+        return svc.comment_react(post_id, comment_id_arg, reaction_type, account_id=account_id)
 
     else:
         return format_error(f"Commande Unipile inconnue: {command}")

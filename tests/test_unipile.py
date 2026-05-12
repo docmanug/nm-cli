@@ -193,19 +193,71 @@ class TestAccountId:
 # --- React not available ---
 
 
-class TestReactNotAvailable:
-    def test_react_returns_error(self, env):
+class TestReact:
+    @patch("nm.services.unipile.requests.get")
+    def test_react_dry_run(self, mock_get, env):
+        mock_get.return_value = _mock_response({
+            "items": [{"id": "acc123", "type": "LINKEDIN"}]
+        })
         result = handle_unipile("post.react", ["post123"], env)
-        assert "Error" in result
-        assert "404" in result
+        assert "DRY RUN" in result
+        assert "post123" in result
+        assert "like" in result
 
-    def test_unreact_returns_error(self, env):
+    @patch("nm.services.unipile.requests.post")
+    @patch("nm.services.unipile.requests.get")
+    def test_react_with_confirm(self, mock_get, mock_post, env):
+        mock_get.return_value = _mock_response({
+            "items": [{"id": "acc123", "type": "LINKEDIN"}]
+        })
+        mock_post.return_value = _mock_response({"object": "ReactionAdded"})
+        result = handle_unipile("post.react", ["post123", "--confirm"], env)
+        assert "Reaction ajoutee" in result
+        assert "ReactionAdded" in result
+
+    @patch("nm.services.unipile.requests.post")
+    @patch("nm.services.unipile.requests.get")
+    def test_react_custom_type(self, mock_get, mock_post, env):
+        mock_get.return_value = _mock_response({
+            "items": [{"id": "acc123", "type": "LINKEDIN"}]
+        })
+        mock_post.return_value = _mock_response({"object": "ReactionAdded"})
+        result = handle_unipile("post.react", ["post123", "--type", "celebrate", "--confirm"], env)
+        assert "Reaction ajoutee" in result
+        call_payload = mock_post.call_args[1].get("json")
+        assert call_payload["reaction_type"] == "celebrate"
+
+    def test_unreact_not_available(self, env):
         result = handle_unipile("post.unreact", ["post123"], env)
         assert "Error" in result
+        assert "non disponible" in result.lower()
 
-    def test_comment_react_returns_error(self, env):
-        result = handle_unipile("comment.react", ["cmt123"], env)
-        assert "Error" in result
+    @patch("nm.services.unipile.requests.get")
+    def test_comment_react_dry_run(self, mock_get, env):
+        mock_get.return_value = _mock_response({
+            "items": [{"id": "acc123", "type": "LINKEDIN"}]
+        })
+        result = handle_unipile(
+            "comment.react",
+            ["cmt123", "--post-id", "post456"],
+            env,
+        )
+        assert "DRY RUN" in result
+        assert "cmt123" in result
+
+    @patch("nm.services.unipile.requests.post")
+    @patch("nm.services.unipile.requests.get")
+    def test_comment_react_with_confirm(self, mock_get, mock_post, env):
+        mock_get.return_value = _mock_response({
+            "items": [{"id": "acc123", "type": "LINKEDIN"}]
+        })
+        mock_post.return_value = _mock_response({"object": "ReactionAdded"})
+        result = handle_unipile(
+            "comment.react",
+            ["cmt123", "--post-id", "post456", "--confirm"],
+            env,
+        )
+        assert "Reaction ajoutee sur commentaire" in result
 
 
 # --- Comment payload ---
@@ -223,13 +275,13 @@ class TestCommentPayload:
         assert "/api/v1/posts/post123/comments" in call_args[1].get("url", call_args[0][0])
 
     @patch("nm.services.unipile.requests.post")
-    def test_comment_reply_payload_has_in_reply_to(self, mock_post):
+    def test_comment_reply_payload_has_comment_id(self, mock_post):
         mock_post.return_value = _mock_response({"id": "r1"})
         svc = UnipileService(api_key="k", base_url="https://test.example.com")
         svc.comment_reply("post123", "cmt456", "Merci", account_id="acc1")
         call_args = mock_post.call_args
         payload = call_args[1].get("json") or call_args[0][1]
-        assert payload["in_reply_to"] == "cmt456"
+        assert payload["comment_id"] == "cmt456"
         assert payload["text"] == "Merci"
         assert payload["account_id"] == "acc1"
 
