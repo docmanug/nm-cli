@@ -512,20 +512,24 @@ class EnrichService:
                     update_values[col_id] = url_val
                     filled_columns.append(field)
 
-        # Boolean columns
+        # Boolean columns — Monday checkbox format: {"checked": "true"} or {"checked": "false"}
+        def _checkbox(val: bool) -> dict:
+            return {"checked": "true"} if val else {}
+
         if col_map.get("fait_esthetique") and col_map["fait_esthetique"] != "global_context":
             cid = col_map["fait_esthetique"]
-            update_values[cid] = qualification["fait_esthetique"]
-            filled_columns.append("fait_esthetique")
+            if qualification["fait_esthetique"]:
+                update_values[cid] = _checkbox(True)
+                filled_columns.append("fait_esthetique")
 
         if col_map.get("google_checked") and col_map["google_checked"] != "global_context":
             cid = col_map["google_checked"]
-            update_values[cid] = True
+            update_values[cid] = _checkbox(True)
             filled_columns.append("google_checked")
 
         # enrichi flag (fr_leads only)
         if col_map.get("enrichi") and col_map["enrichi"] != "global_context":
-            update_values[col_map["enrichi"]] = True
+            update_values[col_map["enrichi"]] = _checkbox(True)
             filled_columns.append("enrichi")
 
         # Specialite
