@@ -93,6 +93,7 @@ services:
       # Creneaux & types de visite
       - visit-types.list
       - slots.list
+      - find-slots
       # Praticiens
       - doctor.list
 
