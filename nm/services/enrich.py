@@ -664,9 +664,17 @@ def handle_enrich(command: str, args: list, profile) -> str:
 
     board = _get_flag("board")
 
+    # The CLI joins all non-flag tokens with dots, e.g. "status 12345" → "status.12345"
+    # Split the command to extract the base command and any embedded item_id
+    cmd_parts = command.split(".")
+    base_cmd = cmd_parts[0]
+    if len(cmd_parts) > 1:
+        # Prepend the embedded arg(s) to args list
+        args = list(cmd_parts[1:]) + list(args)
+
     # --- route commands ---
 
-    if command == "status":
+    if base_cmd == "status":
         positional = _positional()
         if not positional:
             return format_error("Usage: nm enrich status <item_id> [--board fr_leads]")
@@ -675,7 +683,7 @@ def handle_enrich(command: str, args: list, profile) -> str:
         result = svc.status(item_id, bname)
         return format_enrich_status(result)
 
-    elif command in ("lead", "enrich"):
+    elif base_cmd in ("lead", "enrich"):
         positional = _positional()
         if not positional:
             return format_error("Usage: nm enrich lead <item_id> [--board fr_leads]")
@@ -684,7 +692,7 @@ def handle_enrich(command: str, args: list, profile) -> str:
         result = svc.enrich_lead(item_id, bname)
         return format_enrich_result(result)
 
-    elif command == "contact":
+    elif base_cmd == "contact":
         positional = _positional()
         if not positional:
             return format_error("Usage: nm enrich contact <item_id>")
@@ -692,11 +700,11 @@ def handle_enrich(command: str, args: list, profile) -> str:
         result = svc.enrich_lead(item_id, "contacts")
         return format_enrich_result(result)
 
-    elif command == "batch":
+    elif base_cmd == "batch":
         bname = board or "fr_leads"
         limit = int(_get_flag("limit") or "10")
         results = svc.enrich_batch(bname, limit)
         return format_enrich_batch(results)
 
     else:
-        return format_error(f"Commande enrich inconnue: {command}")
+        return format_error(f"Commande enrich inconnue: {base_cmd}")
