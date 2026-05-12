@@ -245,4 +245,4 @@ services:
     crawl4ai_api_token: "enrich-service-2026"
     timeout_per_scrape: 30
     search_max_results: 5
-    max_per_day: 50
+    max_per_day: 200
