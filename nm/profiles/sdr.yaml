@@ -220,6 +220,10 @@ services:
       - call.result
       - call.list-today
 
+  knowledge:
+    commands:
+      - search
+
   supabase:
     commands:
       - sessions.list

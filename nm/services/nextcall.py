@@ -560,6 +560,7 @@ class NextCallService:
         return "\n".join(lines)
 
     def calendar_book(self, date_str: str, time: str, title: str) -> str:
+        time = time.replace("h", ":")  # 14h00 → 14:00
         start = f"{date_str}T{time}:00"
         hour, minute = time.split(":")
         end_hour = int(hour)
