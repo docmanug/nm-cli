@@ -115,21 +115,41 @@ def search_urls(query: str, max_results: int = 5) -> list[dict]:
         return []
 
 
-def scrape_page(url: str, crawl4ai_url: str = "http://localhost:8002",
+def scrape_page(url: str, crawl4ai_url: str = "http://localhost:11235",
                 timeout: int = 30) -> str:
     """POST url to Crawl4AI HTTP endpoint and return markdown content.
 
+    Uses the official Crawl4AI REST API (POST /crawl on port 11235).
     Returns "" on any failure.
     """
     try:
         resp = requests.post(
-            f"{crawl4ai_url}/scrape",
-            json={"url": url},
+            f"{crawl4ai_url}/crawl",
+            json={
+                "urls": [url],
+                "browser_config": {
+                    "type": "BrowserConfig",
+                    "params": {"headless": True},
+                },
+                "crawler_config": {
+                    "type": "CrawlerRunConfig",
+                    "params": {"cache_mode": "bypass"},
+                },
+            },
             timeout=timeout,
         )
         resp.raise_for_status()
         data = resp.json()
-        return data.get("markdown") or ""
+        # Response contains a list of results
+        if isinstance(data, list) and data:
+            return data[0].get("markdown") or data[0].get("html", "")
+        if isinstance(data, dict):
+            result = data.get("result") or data.get("results", [{}])
+            if isinstance(result, list) and result:
+                return result[0].get("markdown") or ""
+            if isinstance(result, dict):
+                return result.get("markdown") or ""
+        return ""
     except Exception:
         return ""
 

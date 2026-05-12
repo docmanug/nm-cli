@@ -155,7 +155,7 @@ services:
       - contact
       - batch
       - status
-    crawl4ai_url: "http://localhost:8002"
+    crawl4ai_url: "http://localhost:11235"
     timeout_per_scrape: 30
     search_max_results: 5
     max_per_day: 50

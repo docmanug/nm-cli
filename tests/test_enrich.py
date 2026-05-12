@@ -116,10 +116,10 @@ class TestScrapePage:
         from nm.services.enrich import scrape_page
 
         mock_post.return_value = _mock_requests_response({
-            "markdown": "# Clinique Dupont\n\nSpécialiste injections botox."
+            "result": [{"markdown": "# Clinique Dupont\n\nSpécialiste injections botox."}]
         })
 
-        result = scrape_page("https://clinique-dupont.fr", crawl4ai_url="http://localhost:8002")
+        result = scrape_page("https://clinique-dupont.fr", crawl4ai_url="http://localhost:11235")
 
         assert "Clinique Dupont" in result
         assert "botox" in result
@@ -156,9 +156,9 @@ class TestScrapePage:
 
         mock_post.assert_called_once()
         call_args = mock_post.call_args
-        assert "http://myserver:9000/scrape" in call_args[0][0] or \
-               call_args[1].get("url", "").endswith("/scrape") or \
-               "http://myserver:9000/scrape" == call_args[0][0]
+        assert "http://myserver:9000/crawl" in call_args[0][0] or \
+               call_args[1].get("url", "").endswith("/crawl") or \
+               "http://myserver:9000/crawl" == call_args[0][0]
 
     @patch("nm.services.enrich.requests.post")
     def test_returns_empty_when_no_markdown_key(self, mock_post):

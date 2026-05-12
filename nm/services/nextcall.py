@@ -574,9 +574,28 @@ class NextCallService:
             "summary": title,
             "startDateTime": start,
             "endDateTime": end,
+            "conferenceDataVersion": 1,
+            "conferenceData": {
+                "createRequest": {
+                    "requestId": f"sophie-{date_str}-{time.replace(':', '')}",
+                    "conferenceSolutionKey": {"type": "hangoutsMeet"},
+                }
+            },
         })
         event_id = result.get("id", "?")
-        return f"Demo confirmee : {title} le {date_str} a {time} (event: {event_id})"
+        meet_link = result.get("hangoutLink", "")
+        if not meet_link:
+            # Try nested conference data
+            conf = result.get("conferenceData", {})
+            eps = conf.get("entryPoints", [])
+            for ep in eps:
+                if ep.get("entryPointType") == "video":
+                    meet_link = ep.get("uri", "")
+                    break
+        msg = f"Demo confirmee : {title} le {date_str} a {time} (event: {event_id})"
+        if meet_link:
+            msg += f"\nLien visio: {meet_link}"
+        return msg
 
     # --- NEXTMOTION PATIENTS ---
 
