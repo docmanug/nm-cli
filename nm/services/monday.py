@@ -684,10 +684,12 @@ class MondayService:
 
     # --- MEETINGS LIST (read-only for managers) ---
 
-    def meetings_list(self, date_filter: str | None = None,
+    def meetings_list(self, owner_filter: str | None = None,
+                      date_filter: str | None = None,
                       days: int | None = None,
                       limit: int = 50) -> str:
         items = self._list_items("meetings", limit, order_by_column="start_date")
+        people_ids = self._config.get("people_ids", {})
 
         # Resolve date filters
         if date_filter == "today":
@@ -707,6 +709,18 @@ class MondayService:
                 continue
             if cutoff and meeting_date and meeting_date < cutoff:
                 continue
+
+            # Filter by owner (people column)
+            if owner_filter:
+                people_col = self._col("meetings", "people")
+                target_id = str(people_ids.get(owner_filter, ""))
+                if target_id:
+                    people_value = next(
+                        (c.get("value", "") for c in item["column_values"]
+                         if c["id"] == people_col), ""
+                    )
+                    if target_id not in str(people_value):
+                        continue
 
             meetings.append({
                 "id": item["id"],
@@ -1243,10 +1257,11 @@ def handle_monday(command: str, args: list, profile) -> str:
 
     # --- MEETINGS LIST ---
     elif command == "meetings.list":
+        owner = get_flag("owner")
         date_filter = get_flag("date")
         days_str = get_flag("days")
         days = int(days_str) if days_str else None
-        return svc.meetings_list(date_filter, days)
+        return svc.meetings_list(owner, date_filter, days)
 
     # --- LEADS ---
     elif command == "leads.list":
