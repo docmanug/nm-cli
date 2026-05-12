@@ -393,13 +393,40 @@ class NextmotionService:
         matched_vt_id = matched_vt.get("id") if matched_vt else None
         vt_name = (matched_vt.get("subject") or matched_vt.get("name") or "?") if matched_vt else visit_type_query
 
-        # 2. Get opening hours for the date
+        # 2. Get opening hours (templates)
         slots_result = self._get(
             f"clinics/{self._clinic_id}/calendar_opening_hours",
-            {"start_date": date_str, "end_date": date_str},
         )
-        raw_slots = slots_result.get("data", slots_result.get("results", []))
-        if not isinstance(raw_slots, list) or not raw_slots:
+        all_slots = slots_result.get("data", slots_result.get("results", []))
+        if not isinstance(all_slots, list) or not all_slots:
+            return f"Aucun creneau d'ouverture configure. Le cabinet est ferme ce jour."
+
+        # Filter by day of week — templates use recurrence
+        target_date = datetime.strptime(date_str, "%Y-%m-%d")
+        target_weekday = target_date.weekday()  # 0=Mon ... 6=Sun
+        raw_slots = []
+        for slot in all_slots:
+            ev = slot.get("calendar_event", {}) or {}
+            recurrence = ev.get("recurrence", "")
+            slot_start_str = ev.get("start_time", slot.get("start_time", ""))
+            if not slot_start_str:
+                continue
+            try:
+                slot_date = datetime.fromisoformat(slot_start_str.replace("Z", ""))
+            except ValueError:
+                continue
+            if recurrence == "weekly_on_day_of_week":
+                if slot_date.weekday() == target_weekday:
+                    raw_slots.append(slot)
+            elif recurrence == "one_time":
+                if slot_date.date() == target_date.date():
+                    raw_slots.append(slot)
+            else:
+                # Unknown recurrence — include if day matches
+                if slot_date.weekday() == target_weekday:
+                    raw_slots.append(slot)
+
+        if not raw_slots:
             return f"Aucun creneau d'ouverture le {date_str}. Le cabinet est ferme ce jour."
 
         # Filter opening hours by visit type if we matched one
@@ -427,13 +454,25 @@ class NextmotionService:
         if not isinstance(raw_appts, list):
             raw_appts = []
 
-        def parse_local(t: str, target_date: str) -> datetime | None:
+        # Check for absence: if ALL appointments are suspended, day is blocked
+        if raw_appts:
+            all_suspended = all(
+                (a.get("status") or "").lower() == "suspended"
+                for a in raw_appts
+            )
+            if all_suspended:
+                return (
+                    f"Le cabinet est en absence le {date_str}. "
+                    f"Tous les RDV sont suspendus. Essayez une autre date."
+                )
+
+        def parse_local(t: str, target_date_str: str) -> datetime | None:
             if not t:
                 return None
             try:
                 parsed = datetime.fromisoformat(t.replace("Z", ""))
                 return datetime.strptime(
-                    f"{target_date}T{parsed.strftime('%H:%M')}",
+                    f"{target_date_str}T{parsed.strftime('%H:%M')}",
                     "%Y-%m-%dT%H:%M",
                 )
             except ValueError:
@@ -443,7 +482,7 @@ class NextmotionService:
         busy = []
         for a in raw_appts:
             status = (a.get("status") or "").lower()
-            if status in ("cancelled", "canceled", "no_show"):
+            if status in ("cancelled", "canceled", "no_show", "suspended"):
                 continue
             ev = a.get("calendar_event", {}) or {}
             s = parse_local(ev.get("start_time", ""), date_str)
