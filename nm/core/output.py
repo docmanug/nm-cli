@@ -619,7 +619,11 @@ def format_nm_chat_contacts_list(contacts: list) -> str:
 
 def format_enrich_result(result: dict) -> str:
     lead_name = result.get("name", "?")
-    lines = [f"Enrichissement: {lead_name}"]
+    item_id = result.get("item_id", "")
+    header = f"Enrichissement: {lead_name}"
+    if item_id:
+        header += f" (#{item_id})"
+    lines = [header]
     filled = result.get("filled_columns", [])
     if filled:
         lines.append(f"  Colonnes remplies: {', '.join(filled)}")
@@ -637,15 +641,18 @@ def format_enrich_result(result: dict) -> str:
 
 def format_enrich_batch(results: list) -> str:
     total = len(results)
-    success = sum(1 for r in results if not r.get("errors"))
-    errors = sum(1 for r in results if r.get("errors"))
-    already = sum(1 for r in results if r.get("already_enriched"))
+    enriched = [r for r in results if not r.get("errors") and not r.get("already_enriched")]
+    errored = [r for r in results if r.get("errors")]
+    already = [r for r in results if r.get("already_enriched")]
     lines = [
         f"Batch enrichissement: {total} leads traites",
-        f"  Enrichis: {success}",
-        f"  Erreurs: {errors}",
-        f"  Deja enrichis: {already}",
+        f"  Enrichis: {len(enriched)}",
+        f"  Erreurs: {len(errored)}",
+        f"  Deja enrichis: {len(already)}",
     ]
+    if enriched:
+        ids = [r.get("item_id", "?") for r in enriched]
+        lines.append(f"  IDs enrichis: {', '.join(str(i) for i in ids)}")
     return "\n".join(lines)
 
 

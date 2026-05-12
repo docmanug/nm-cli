@@ -509,6 +509,8 @@ class TestEnrichService:
         # Simulate already-enriched lead
         monday_mock._parse_columns.return_value = {
             "boolean_mm13e5ct": "true",
+            "boolean_mm39aqqy": "true",
+            "boolean_mm39pkvw": "true",
             "text_mm13wqzg": "https://existing.fr",
         }
 

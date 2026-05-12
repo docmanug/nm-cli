@@ -42,10 +42,11 @@ ENRICHMENT_COLUMNS_FR_LEADS = {
     "nb_praticiens": "numeric_mks0a91v",
     "nb_assistantes": "numeric_mks0hfyf",
     "nb_secretaires": "numeric_mks0hgrz",
-    "enrichi": "boolean_mm13e5ct",
+    "enrichi": "boolean_mm39pkvw",
+    "recherche_effectuee": "boolean_mm39aqqy",
     "google_checked": "boolean_mm15wxry",
     "fait_esthetique": "boolean_mm15smqp",
-    "global_context": "global_context",
+    "global_context": "long_text_mm39cz9w",
 }
 
 ENRICHMENT_COLUMNS_CONTACTS = {
@@ -319,12 +320,14 @@ class EnrichService:
         timeout: int = 30,
         max_results: int = 5,
         api_token: str = "",
+        sdr_person_id: int | None = None,
     ):
         self._monday = monday_svc
         self._crawl4ai_url = crawl4ai_url
         self._timeout = timeout
         self._max_results = max_results
         self._api_token = api_token
+        self._sdr_person_id = sdr_person_id
 
     def _col_map(self, board_name: str) -> dict:
         return _BOARD_COLUMNS.get(board_name, ENRICHMENT_COLUMNS_FR_LEADS)
@@ -393,10 +396,10 @@ class EnrichService:
         cols = self._monday._parse_columns(item.get("column_values", []))
         lead_name = item.get("name", "?")
 
-        # --- Step 2: skip if already enriched ---
-        enrichi_col = col_map.get("enrichi", "")
+        # --- Step 2: skip if already searched (recherche_effectuee) ---
+        recherche_col = col_map.get("recherche_effectuee", col_map.get("enrichi", ""))
         already_enriched = bool(
-            cols.get(enrichi_col, "").lower() in ("true", "1", "v", "yes")
+            cols.get(recherche_col, "").lower() in ("true", "1", "v", "yes")
         )
         if already_enriched:
             return {
@@ -527,10 +530,8 @@ class EnrichService:
             update_values[cid] = _checkbox(True)
             filled_columns.append("google_checked")
 
-        # enrichi flag (fr_leads only)
-        if col_map.get("enrichi") and col_map["enrichi"] != "global_context":
-            update_values[col_map["enrichi"]] = _checkbox(True)
-            filled_columns.append("enrichi")
+        # enrichi flag (fr_leads only) — only check if we actually found data
+        # We defer this to after all columns are processed (see below)
 
         # Specialite
         if qualification["specialites"] and col_map.get("specialite"):
@@ -549,6 +550,32 @@ class EnrichService:
                 except ValueError:
                     pass
 
+        # Global context — write the briefing into the column
+        if briefing and col_map.get("global_context"):
+            cid = col_map["global_context"]
+            update_values[cid] = {"text": briefing[:2000]}
+            filled_columns.append("global_context")
+
+        # SDR attribution — assign the enriching agent as SDR owner
+        if self._sdr_person_id:
+            sdr_col = "sdr"  # column ID on FR Leads and Contacts boards
+            existing_sdr = cols.get(sdr_col, "")
+            if not existing_sdr:
+                update_values[sdr_col] = {"personsAndTeams": [{"id": self._sdr_person_id, "kind": "person"}]}
+                filled_columns.append("sdr")
+
+        # recherche_effectuee = TOUJOURS coché (pour ne pas rescanner)
+        if col_map.get("recherche_effectuee"):
+            update_values[col_map["recherche_effectuee"]] = _checkbox(True)
+            filled_columns.append("recherche_effectuee")
+
+        # enrichi = seulement si des données utiles ont été trouvées
+        real_data_columns = [c for c in filled_columns
+                             if c not in ("enrichi", "recherche_effectuee", "google_checked")]
+        if real_data_columns and col_map.get("enrichi") and col_map["enrichi"] != "global_context":
+            update_values[col_map["enrichi"]] = _checkbox(True)
+            filled_columns.append("enrichi")
+
         if update_values:
             try:
                 self._monday._update_columns(board_name, item_id, update_values)
@@ -562,6 +589,7 @@ class EnrichService:
             errors.append(f"Monday note error: {exc}")
 
         return {
+            "item_id": item_id,
             "name": lead_name,
             "already_enriched": False,
             "briefing": briefing,
@@ -574,7 +602,7 @@ class EnrichService:
     def enrich_batch(self, board_name: str = "fr_leads", limit: int = 10) -> list[dict]:
         """Batch enrich non-enriched leads from a board."""
         col_map = self._col_map(board_name)
-        enrichi_col = col_map.get("enrichi", "")
+        enrichi_col = col_map.get("recherche_effectuee", col_map.get("enrichi", ""))
 
         # Fetch items from board
         try:
@@ -597,6 +625,7 @@ class EnrichService:
             already = bool(cols.get(enrichi_col, "").lower() in ("true", "1", "v", "yes"))
             if not already:
                 result = self.enrich_lead(item["id"], board_name)
+                result["item_id"] = item["id"]
                 results.append(result)
                 count += 1
 
@@ -648,12 +677,17 @@ def handle_enrich(command: str, args: list, profile) -> str:
     timeout = int(enrich_config.get("timeout", 30))
     max_results = int(enrich_config.get("max_results", 5))
 
+    # Resolve SDR person ID from profile (for auto-attribution)
+    people_ids = monday_config.get("people_ids", {})
+    sdr_person_id = people_ids.get("sophie") or people_ids.get("sdr") or None
+
     svc = EnrichService(
         monday_svc=monday_svc,
         crawl4ai_url=crawl4ai_url,
         timeout=timeout,
         max_results=max_results,
         api_token=api_token,
+        sdr_person_id=sdr_person_id,
     )
 
     # Helpers
