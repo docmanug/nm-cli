@@ -339,6 +339,20 @@ class NextmotionService:
 
     # ---- FIND AVAILABLE SLOTS ----
 
+    # Common patient terms → medical terms (fallback for fuzzy match)
+    _ALIASES = {
+        "botox": "toxine botulique",
+        "filler": "acide hyaluronique",
+        "rides": "injections",
+        "ultrasons": "hifu",
+        "cryo": "cryolipolyse",
+        "meso": "mésothérapie",
+        "radiofréquence": "radiofréquence",
+        "radiofrequence": "radiofréquence",
+        "peeling": "peeling",
+        "led": "lampe led",
+    }
+
     def _match_sub_visit_type(self, query: str) -> tuple[str | None, str]:
         """Fuzzy-match patient query against actual sub_visit_types in NM.
 
@@ -364,18 +378,27 @@ class NextmotionService:
             if name:
                 names.append((name, sid))
 
-        # 1. Exact substring match
-        for name, sid in names:
-            nl = name.lower()
-            if query_lower in nl or nl in query_lower:
-                return sid, name
+        # Expand aliases: "botox" → also try "toxine botulique"
+        search_terms = [query_lower]
+        alias = self._ALIASES.get(query_lower)
+        if alias:
+            search_terms.append(alias.lower())
 
-        # 2. Keyword match (best score)
-        keywords = query_lower.split()
+        # 1. Exact substring match (try original + alias)
+        for term in search_terms:
+            for name, sid in names:
+                nl = name.lower()
+                if term in nl or nl in term:
+                    return sid, name
+
+        # 2. Keyword match (best score, try original + alias)
+        all_keywords = set()
+        for term in search_terms:
+            all_keywords.update(term.split())
         best_score, best_name, best_id = 0, None, None
         for name, sid in names:
             nl = name.lower()
-            score = sum(1 for kw in keywords if kw in nl)
+            score = sum(1 for kw in all_keywords if kw in nl)
             if score > best_score:
                 best_score, best_name, best_id = score, name, sid
 
