@@ -256,31 +256,41 @@ class NextCallService:
         result = self._call_tool("meeting_transcripts_get", {"id": transcript_id})
         t = result if isinstance(result, dict) else {}
 
-        # If _call_tool returned {"text": "<json string>"}, re-parse the inner JSON
-        if list(t.keys()) == ["text"] and isinstance(t.get("text"), str):
+        # Unwrap: API returns {"transcript": {actual data}}
+        if "transcript" in t and isinstance(t["transcript"], dict):
+            t = t["transcript"]
+        # Fallback: _call_tool may return {"text": "<json string>"}
+        elif list(t.keys()) == ["text"] and isinstance(t.get("text"), str):
             try:
-                t = _json.loads(t["text"])
+                parsed = _json.loads(t["text"])
+                t = parsed.get("transcript", parsed) if isinstance(parsed, dict) else parsed
             except (ValueError, TypeError):
                 pass
 
         # Extract transcript entries — may be JSON string or list
-        entries = t.get("transcript_entries", t.get("transcript", ""))
+        entries = t.get("transcript_entries", "")
         if isinstance(entries, str) and entries:
             try:
                 entries = _json.loads(entries)
             except (ValueError, TypeError):
                 pass
 
+        # Duration: API returns duration_seconds (int)
+        duration = t.get("duration_seconds", t.get("duration", ""))
+        if isinstance(duration, (int, float)) and duration:
+            mins, secs = divmod(int(duration), 60)
+            duration = f"{mins}m{secs:02d}s"
+
         return format_meeting_transcript({
             "id": t.get("id", transcript_id),
             "title": t.get("title", "?"),
-            "date": t.get("date", t.get("startTime", t.get("createdAt", "?")))[:10] if t.get("date", t.get("startTime", t.get("createdAt"))) else "?",
-            "start": t.get("startTime", ""),
-            "end": t.get("endTime", ""),
-            "duration": t.get("duration", ""),
+            "date": (t.get("start_time", t.get("date", "")) or "")[:10] or "?",
+            "start": t.get("start_time", ""),
+            "end": t.get("end_time", ""),
+            "duration": duration,
             "participants": t.get("participants", []),
             "status": t.get("status", "?"),
-            "summary": t.get("summary", t.get("aiSummary", "")),
+            "summary": t.get("summary", t.get("ai_summary", "")),
             "transcript": entries,
         })
 
