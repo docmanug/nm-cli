@@ -64,6 +64,9 @@ SERVICE_CREDENTIALS = {
         ("NEXTMOTION_API_URL", "api_url", True),
         ("NEXTMOTION_ACCESS_TOKEN", "access_token", True),
     ],
+    "enrich": [
+        ("CRAWL4AI_URL", "crawl4ai_url", False),
+    ],
 }
 
 

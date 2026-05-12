@@ -124,3 +124,9 @@ register_service("nextmotion", handle_nextmotion)
 
 from nm.services.knowledge import handle_knowledge
 register_service("knowledge", handle_knowledge)
+
+try:
+    from nm.services.enrich import handle_enrich
+    register_service("enrich", handle_enrich)
+except ImportError:
+    pass  # enrich service not yet implemented
