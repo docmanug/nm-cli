@@ -339,64 +339,100 @@ class NextmotionService:
 
     # ---- FIND AVAILABLE SLOTS ----
 
-    _SYNONYMS = {
-        "botox": "toxine botulique",
-        "toxine": "toxine botulique",
-        "acide hyaluronique": "acide hyaluronique",
-        "filler": "acide hyaluronique",
-        "remplissage": "acide hyaluronique",
-        "levres": "acide hyaluronique",
-        "rides": "injections",
-        "consultation": "première consultation",
-        "premiere consultation": "première consultation",
-        "premiere consult": "première consultation",
-        "controle": "contrôle",
-        "suivi": "suivi",
-        "led": "lampe led",
-        "ultrasons": "hifu",
-        "radiofréquence": "radiofréquence",
-        "radiofrequence": "radiofréquence",
-        "cryo": "cryolipolyse",
-        "meso": "mésothérapie",
-        "peeling": "peelings",
-    }
+    def _match_sub_visit_type(self, query: str) -> tuple[str | None, str]:
+        """Fuzzy-match patient query against actual sub_visit_types in NM.
+
+        Returns (sub_visit_type_id or None, matched_name).
+        """
+        query_lower = query.lower().strip()
+        if not query_lower:
+            return None, query
+
+        # Fetch all sub_visit_types from clinic
+        try:
+            result = self._get(f"clinics/{self._clinic_id}/sub_visit_types")
+            svts = result.get("data", result.get("results", []))
+        except Exception:
+            svts = []
+        if not isinstance(svts, list) or not svts:
+            return None, query
+
+        names = []
+        for svt in svts:
+            name = svt.get("subject") or svt.get("name") or ""
+            sid = svt.get("id", "")
+            if name:
+                names.append((name, sid))
+
+        # 1. Exact substring match
+        for name, sid in names:
+            nl = name.lower()
+            if query_lower in nl or nl in query_lower:
+                return sid, name
+
+        # 2. Keyword match (best score)
+        keywords = query_lower.split()
+        best_score, best_name, best_id = 0, None, None
+        for name, sid in names:
+            nl = name.lower()
+            score = sum(1 for kw in keywords if kw in nl)
+            if score > best_score:
+                best_score, best_name, best_id = score, name, sid
+
+        if best_name and best_score > 0:
+            return best_id, best_name
+
+        # 3. No match — return query as-is, let the API try
+        return None, query
 
     def find_available_slots(self, visit_type_query: str, date_str: str,
                              doctor: str | None = None) -> str:
         """Use POST /visit_types/opening_hours to get bookable slots.
 
-        This endpoint handles everything server-side: opening hours,
-        existing appointments, absences, visit type filtering.
-        Returns slots with visit_type_opening_hour IDs for booking.
+        Fuzzy-matches the patient's treatment query against actual NM
+        sub_visit_types, then calls the API which handles opening hours,
+        appointments, absences server-side.
         """
         if not date_str:
             return format_error("Date requise (YYYY-MM-DD)")
 
-        query_lower = (visit_type_query or "").lower().strip()
-        sub_vt_name = self._SYNONYMS.get(query_lower, query_lower)
+        svt_id, matched_name = self._match_sub_visit_type(visit_type_query)
 
         body = {
             "start_date": date_str,
             "end_date": date_str,
-            "sub_visit_type_name": sub_vt_name,
         }
+        if svt_id:
+            body["sub_visit_type_id"] = svt_id
+        else:
+            body["sub_visit_type_name"] = matched_name
         if doctor:
             body["doctor_name"] = doctor
 
-        result = self._post(
-            f"clinics/{self._clinic_id}/visit_types/opening_hours", body
-        )
+        try:
+            result = self._post(
+                f"clinics/{self._clinic_id}/visit_types/opening_hours", body
+            )
+        except Exception as e:
+            err = str(e)
+            if "svt_not_found" in err:
+                return (
+                    f"Le traitement \"{visit_type_query}\" n'a pas ete trouve "
+                    f"dans les motifs de consultation. Verifiez le nom exact."
+                )
+            raise
+
         slots = result.get("data", [])
         if not isinstance(slots, list) or not slots:
             return (
                 f"Aucun creneau disponible le {date_str} "
-                f"pour \"{sub_vt_name}\". Le docteur est peut-etre absent ou "
+                f"pour \"{matched_name}\". Le docteur est peut-etre absent ou "
                 f"tous les creneaux sont pris. Essayez une autre date."
             )
 
         lines = [
             f"{len(slots)} creneau(x) disponible(s) le {date_str} "
-            f"pour \"{sub_vt_name}\" :\n"
+            f"pour \"{matched_name}\" :\n"
         ]
         for i, s in enumerate(slots, 1):
             ts = s.get("time_slot", "")
