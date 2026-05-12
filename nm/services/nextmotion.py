@@ -376,27 +376,47 @@ class NextmotionService:
             f"Si aucun motif ne correspond, reponds : NONE"
         )
 
-        # Call OpenAI gpt-4o-mini
+        # Try Gemini Flash first, fallback to OpenAI gpt-4o-mini
         import os
-        api_key = os.environ.get("GEMINI_API_KEY")
-        if not api_key:
-            return None, query
+        answer = None
 
-        try:
-            resp = requests.post(
-                f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={api_key}",
-                json={
-                    "contents": [{"parts": [{"text": prompt}]}],
-                    "generationConfig": {"temperature": 0, "maxOutputTokens": 50},
-                },
-                timeout=5,
-            )
-            resp.raise_for_status()
-            answer = resp.json()["candidates"][0]["content"]["parts"][0]["text"].strip()
-        except Exception:
-            return None, query
+        gemini_key = os.environ.get("GEMINI_API_KEY")
+        if gemini_key:
+            try:
+                resp = requests.post(
+                    f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={gemini_key}",
+                    json={
+                        "contents": [{"parts": [{"text": prompt}]}],
+                        "generationConfig": {"temperature": 0, "maxOutputTokens": 50},
+                    },
+                    timeout=5,
+                )
+                if resp.ok:
+                    answer = resp.json()["candidates"][0]["content"]["parts"][0]["text"].strip()
+            except Exception:
+                pass
 
-        if answer == "NONE" or len(answer) < 10:
+        if not answer:
+            openai_key = os.environ.get("OPENAI_API_KEY")
+            if openai_key:
+                try:
+                    resp = requests.post(
+                        "https://api.openai.com/v1/chat/completions",
+                        headers={"Authorization": f"Bearer {openai_key}"},
+                        json={
+                            "model": "gpt-4o-mini",
+                            "messages": [{"role": "user", "content": prompt}],
+                            "max_tokens": 50,
+                            "temperature": 0,
+                        },
+                        timeout=5,
+                    )
+                    if resp.ok:
+                        answer = resp.json()["choices"][0]["message"]["content"].strip()
+                except Exception:
+                    pass
+
+        if not answer or answer == "NONE" or len(answer) < 10:
             return None, query
 
         # Find the matched entry
