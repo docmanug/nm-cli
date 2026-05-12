@@ -213,6 +213,9 @@ services:
       - calendar.check
       - calendar.book
     max_message_length: 500
+    user_ids:
+      theo: 242ca4d7-37ef-487a-aaf0-83e06a936a29
+    default_calendar_user: theo
 
   elevenlabs:
     commands:
@@ -231,3 +234,14 @@ services:
       - sessions.summaries
       - messages.search
       - sessions.save
+
+  enrich:
+    commands:
+      - lead
+      - contact
+      - batch
+      - status
+    crawl4ai_url: "http://localhost:8002"
+    timeout_per_scrape: 30
+    search_max_results: 5
+    max_per_day: 50
