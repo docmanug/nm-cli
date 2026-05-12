@@ -312,7 +312,7 @@ def format_meeting_transcripts_list(transcripts: list) -> str:
     lines = [f"{len(transcripts)} transcripts :\n"]
     for i, t in enumerate(transcripts, 1):
         lines.append(
-            f"#{i} [{t.get('date', '?')}] {t.get('title', '?')} "
+            f"#{i} {t.get('id', '?')} [{t.get('date', '?')}] {t.get('title', '?')} "
             f"| {t.get('status', '?')} | {t.get('duration', '?')}min"
         )
     return "\n".join(lines)
