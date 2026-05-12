@@ -297,27 +297,43 @@ def format_meeting_transcript(transcript: dict) -> str:
         f"Transcript #{transcript.get('id', '?')}",
         f"  Titre: {transcript.get('title', 'N/A')}",
         f"  Date: {transcript.get('date', 'N/A')}",
-        f"  Participants: {', '.join(str(p) for p in participants)}",
-        f"  Statut: {transcript.get('status', 'N/A')}",
     ]
+    start = transcript.get("start", "")
+    end = transcript.get("end", "")
+    duration = transcript.get("duration", "")
+    if start:
+        lines.append(f"  Debut: {start}")
+    if end:
+        lines.append(f"  Fin: {end}")
+    if duration:
+        lines.append(f"  Duree: {duration}")
+    lines.append(f"  Participants: {', '.join(str(p) for p in participants)}")
+    lines.append(f"  Statut: {transcript.get('status', 'N/A')}")
+
     summary = transcript.get("summary", "")
     if summary:
         if isinstance(summary, dict):
             summary = summary.get("text", summary.get("content", str(summary)))
-        lines.append(f"  Resume: {str(summary)[:3000]}")
+        lines.append(f"\n  RESUME:\n  {str(summary)[:3000]}")
+
     text = transcript.get("transcript", "")
     if text:
         if isinstance(text, list):
-            # List of {speaker, text, timestamp} entries
             parts = []
-            for entry in text[:50]:
-                speaker = entry.get("speaker", entry.get("name", "?")) if isinstance(entry, dict) else "?"
-                content = entry.get("text", entry.get("content", str(entry))) if isinstance(entry, dict) else str(entry)
-                parts.append(f"    [{speaker}] {content}")
-            text = "\n".join(parts)
+            for entry in text[:80]:
+                if isinstance(entry, dict):
+                    speaker = entry.get("speaker", entry.get("speakerName", entry.get("name", "?")))
+                    content = entry.get("text", entry.get("content", ""))
+                    parts.append(f"  [{speaker}] {content}")
+                else:
+                    parts.append(f"  {entry}")
+            lines.append(f"\n  TRANSCRIPT ({len(text)} entries):")
+            lines.append("\n".join(parts))
         elif isinstance(text, dict):
             text = text.get("text", text.get("content", str(text)))
-        lines.append(f"  Transcript:\n{str(text)[:5000]}")
+            lines.append(f"\n  TRANSCRIPT:\n  {str(text)[:5000]}")
+        else:
+            lines.append(f"\n  TRANSCRIPT:\n  {str(text)[:5000]}")
     return "\n".join(lines)
 
 

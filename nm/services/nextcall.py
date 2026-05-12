@@ -254,14 +254,25 @@ class NextCallService:
     def meeting_transcripts_get(self, transcript_id: str) -> str:
         result = self._call_tool("meeting_transcripts_get", {"id": transcript_id})
         t = result if isinstance(result, dict) else {}
+        # API returns transcript_entries (list or JSON string), not transcript
+        entries = t.get("transcript_entries", t.get("transcript", t.get("text", "")))
+        if isinstance(entries, str):
+            try:
+                import json as _json
+                entries = _json.loads(entries)
+            except (ValueError, TypeError):
+                pass
         return format_meeting_transcript({
             "id": t.get("id", transcript_id),
             "title": t.get("title", "?"),
-            "date": t.get("date", t.get("createdAt", "?"))[:10] if t.get("date", t.get("createdAt")) else "?",
+            "date": t.get("date", t.get("startTime", t.get("createdAt", "?")))[:10] if t.get("date", t.get("startTime", t.get("createdAt"))) else "?",
+            "start": t.get("startTime", ""),
+            "end": t.get("endTime", ""),
+            "duration": t.get("duration", ""),
             "participants": t.get("participants", []),
             "status": t.get("status", "?"),
             "summary": t.get("summary", t.get("aiSummary", "")),
-            "transcript": t.get("transcript", t.get("text", "")),
+            "transcript": entries,
         })
 
     def meeting_transcripts_recent(self, contact_id: str | None = None,
