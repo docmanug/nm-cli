@@ -347,7 +347,7 @@ class NextmotionService:
         "remplissage": "acide hyaluronique",
         "levres": "acide hyaluronique",
         "rides": "injections",
-        "consultation": "consultation",
+        "consultation": "première consultation",
         "premiere consultation": "première consultation",
         "premiere consult": "première consultation",
         "controle": "contrôle",
@@ -363,237 +363,53 @@ class NextmotionService:
 
     def find_available_slots(self, visit_type_query: str, date_str: str,
                              doctor: str | None = None) -> str:
+        """Use POST /visit_types/opening_hours to get bookable slots.
+
+        This endpoint handles everything server-side: opening hours,
+        existing appointments, absences, visit type filtering.
+        Returns slots with visit_type_opening_hour IDs for booking.
+        """
         if not date_str:
             return format_error("Date requise (YYYY-MM-DD)")
 
-        # 1. Get visit types and fuzzy-match
-        vt_result = self._get(f"clinics/{self._clinic_id}/visit_types")
-        vts = vt_result.get("data", vt_result.get("results", []))
-        if not isinstance(vts, list) or not vts:
-            return format_error("Aucun type de visite configure")
-
-        matched_vt = None
         query_lower = (visit_type_query or "").lower().strip()
-        expanded = self._SYNONYMS.get(query_lower, query_lower)
+        sub_vt_name = self._SYNONYMS.get(query_lower, query_lower)
 
-        if expanded:
-            for vt in vts:
-                name = (vt.get("subject") or vt.get("name") or "").lower()
-                if expanded in name or name in expanded:
-                    matched_vt = vt
-                    break
-            if not matched_vt:
-                keywords = expanded.split()
-                best_score, best_vt = 0, None
-                for vt in vts:
-                    name = (vt.get("subject") or vt.get("name") or "").lower()
-                    score = sum(1 for kw in keywords if kw in name)
-                    if score > best_score:
-                        best_score, best_vt = score, vt
-                if best_vt and best_score > 0:
-                    matched_vt = best_vt
+        body = {
+            "start_date": date_str,
+            "end_date": date_str,
+            "sub_visit_type_name": sub_vt_name,
+        }
+        if doctor:
+            body["doctor_name"] = doctor
 
-        duration_raw = int(matched_vt.get("duration", matched_vt.get("duration_minutes", 0))) if matched_vt else 0
-        duration = duration_raw if duration_raw > 0 else 30
-        matched_vt_id = matched_vt.get("id") if matched_vt else None
-        vt_name = (matched_vt.get("subject") or matched_vt.get("name") or "?") if matched_vt else visit_type_query
-
-        # 2. Get opening hours (templates)
-        slots_result = self._get(
-            f"clinics/{self._clinic_id}/calendar_opening_hours",
+        result = self._post(
+            f"clinics/{self._clinic_id}/visit_types/opening_hours", body
         )
-        all_slots = slots_result.get("data", slots_result.get("results", []))
-        if not isinstance(all_slots, list) or not all_slots:
-            return f"Aucun creneau d'ouverture configure. Le cabinet est ferme ce jour."
-
-        # Filter by day of week — templates use recurrence
-        target_date = datetime.strptime(date_str, "%Y-%m-%d")
-        target_weekday = target_date.weekday()  # 0=Mon ... 6=Sun
-        raw_slots = []
-        for slot in all_slots:
-            ev = slot.get("calendar_event", {}) or {}
-            recurrence = ev.get("recurrence", "")
-            slot_start_str = ev.get("start_time", slot.get("start_time", ""))
-            if not slot_start_str:
-                continue
-            try:
-                slot_date = datetime.fromisoformat(slot_start_str.replace("Z", ""))
-            except ValueError:
-                continue
-            if recurrence == "weekly_on_day_of_week":
-                if slot_date.weekday() == target_weekday:
-                    raw_slots.append(slot)
-            elif recurrence == "one_time":
-                if slot_date.date() == target_date.date():
-                    raw_slots.append(slot)
-            else:
-                # Unknown recurrence — include if day matches
-                if slot_date.weekday() == target_weekday:
-                    raw_slots.append(slot)
-
-        if not raw_slots:
-            return f"Aucun creneau d'ouverture le {date_str}. Le cabinet est ferme ce jour."
-
-        # Filter opening hours by visit type if we matched one
-        if matched_vt_id:
-            filtered = []
-            for slot in raw_slots:
-                slot_vt_ids = set()
-                for vt in (slot.get("visit_types") or []):
-                    if isinstance(vt, dict):
-                        slot_vt_ids.add(vt.get("id"))
-                for svt in (slot.get("sub_visit_types") or []):
-                    if isinstance(svt, dict):
-                        slot_vt_ids.add(svt.get("id"))
-                        slot_vt_ids.add(svt.get("visit_type_id"))
-                if not slot_vt_ids or matched_vt_id in slot_vt_ids:
-                    filtered.append(slot)
-            raw_slots = filtered if filtered else raw_slots
-
-        # 3. Get absences for the date
-        try:
-            abs_result = self._get(
-                f"clinics/{self._clinic_id}/calendar_absences",
-            )
-            raw_absences = abs_result.get("data", abs_result.get("results", []))
-        except Exception:
-            raw_absences = []
-
-        def parse_local(t: str, target_date_str: str) -> datetime | None:
-            if not t:
-                return None
-            try:
-                parsed = datetime.fromisoformat(t.replace("Z", ""))
-                return datetime.strptime(
-                    f"{target_date_str}T{parsed.strftime('%H:%M')}",
-                    "%Y-%m-%dT%H:%M",
-                )
-            except ValueError:
-                return None
-
-        # Check absences that overlap with the requested date
-        absence_busy = []
-        for ab in (raw_absences if isinstance(raw_absences, list) else []):
-            ev = ab.get("calendar_event", {}) or {}
-            abs_start_str = ev.get("start_time", "")
-            abs_end_str = ev.get("end_time", "")
-            if not abs_start_str or not abs_end_str:
-                continue
-            try:
-                abs_start = datetime.fromisoformat(abs_start_str.replace("Z", ""))
-                abs_end = datetime.fromisoformat(abs_end_str.replace("Z", ""))
-            except ValueError:
-                continue
-            # Check if absence overlaps with requested date
-            day_start = datetime.strptime(f"{date_str}T00:00", "%Y-%m-%dT%H:%M")
-            day_end = datetime.strptime(f"{date_str}T23:59", "%Y-%m-%dT%H:%M")
-            if abs_start <= day_end and abs_end >= day_start:
-                # Clamp to day boundaries and add as busy
-                clamped_start = max(abs_start, day_start)
-                clamped_end = min(abs_end, day_end)
-                s = parse_local(clamped_start.isoformat(), date_str)
-                e = parse_local(clamped_end.isoformat(), date_str)
-                if s and e:
-                    absence_busy.append((s, e))
-
-        # Full-day absence: if absence covers all opening hours, day is blocked
-        if absence_busy:
-            for slot in raw_slots:
-                cal = slot.get("calendar_event", {}) or {}
-                ss = parse_local(cal.get("start_time", ""), date_str)
-                se = parse_local(cal.get("end_time", ""), date_str)
-                if ss and se:
-                    all_covered = any(
-                        ab_s <= ss and ab_e >= se for ab_s, ab_e in absence_busy
-                    )
-                    if not all_covered:
-                        break
-            else:
-                return (
-                    f"Le Docteur Elard est absent le {date_str}. "
-                    f"Essayez une autre date."
-                )
-
-        # 4. Get existing appointments for the date
-        appts_result = self._get(
-            f"clinics/{self._clinic_id}/calendar_appointments",
-            {"date": date_str, "limit": 100},
-        )
-        raw_appts = appts_result.get("data", appts_result.get("results", []))
-        if not isinstance(raw_appts, list):
-            raw_appts = []
-
-        # Parse busy intervals from appointments + absences
-        busy = list(absence_busy)
-        for a in raw_appts:
-            status = (a.get("status") or "").lower()
-            if status in ("cancelled", "canceled", "no_show", "suspended"):
-                continue
-            ev = a.get("calendar_event", {}) or {}
-            s = parse_local(ev.get("start_time", ""), date_str)
-            e = parse_local(ev.get("end_time", ""), date_str)
-            if s and e:
-                busy.append((s, e))
-        busy.sort(key=lambda x: x[0])
-
-        # 4. For each opening slot, find free windows >= duration
-        available = []
-        for slot in raw_slots:
-            cal = slot.get("calendar_event", {}) or {}
-            slot_start = parse_local(
-                cal.get("start_time", slot.get("start_time", "")), date_str
-            )
-            slot_end = parse_local(
-                cal.get("end_time", slot.get("end_time", "")), date_str
-            )
-            if not slot_start or not slot_end:
-                continue
-
-            slot_id = slot.get("id", "")
-
-            overlapping = [
-                (max(b[0], slot_start), min(b[1], slot_end))
-                for b in busy
-                if b[0] < slot_end and b[1] > slot_start
-            ]
-            overlapping.sort(key=lambda x: x[0])
-
-            cursor = slot_start
-            for b_start, b_end in overlapping:
-                if b_start > cursor:
-                    gap = b_start - cursor
-                    if gap >= timedelta(minutes=duration):
-                        available.append((cursor, cursor + timedelta(minutes=duration), slot_id))
-                cursor = max(cursor, b_end)
-            if slot_end > cursor:
-                gap = slot_end - cursor
-                if gap >= timedelta(minutes=duration):
-                    available.append((cursor, cursor + timedelta(minutes=duration), slot_id))
-
-        # Deduplicate by start time
-        seen = set()
-        unique = []
-        for start, end, sid in sorted(available, key=lambda x: x[0]):
-            key = start.strftime("%H:%M")
-            if key not in seen:
-                seen.add(key)
-                unique.append((start, end, sid))
-        available = unique
-
-        if not available:
+        slots = result.get("data", [])
+        if not isinstance(slots, list) or not slots:
             return (
-                f"Aucun creneau libre de {duration}min le {date_str} "
-                f"pour \"{vt_name}\". Essayez une autre date."
+                f"Aucun creneau disponible le {date_str} "
+                f"pour \"{sub_vt_name}\". Le docteur est peut-etre absent ou "
+                f"tous les creneaux sont pris. Essayez une autre date."
             )
 
         lines = [
-            f"{len(available)} creneau(x) disponible(s) le {date_str} "
-            f"pour \"{vt_name}\" ({duration}min) :\n"
+            f"{len(slots)} creneau(x) disponible(s) le {date_str} "
+            f"pour \"{sub_vt_name}\" :\n"
         ]
-        for i, (start, end, sid) in enumerate(available, 1):
-            sh = start.strftime("%Hh%M").replace("h00", "h")
-            eh = end.strftime("%Hh%M").replace("h00", "h")
-            lines.append(f"  {i}. {sh} - {eh} | opening_hour_id: {sid}")
+        for i, s in enumerate(slots, 1):
+            ts = s.get("time_slot", "")
+            vt_oh_id = s.get("id", "")
+            if "T" in ts:
+                t = ts.split("T")[1][:5]
+                h, m = t.split(":")
+                time_fmt = f"{int(h)}h{m}" if m != "00" else f"{int(h)}h"
+            else:
+                time_fmt = ts
+            lines.append(
+                f"  {i}. {time_fmt} | visit_type_opening_hour_id: {vt_oh_id}"
+            )
         return "\n".join(lines)
 
     # ---- DOCTORS ----
