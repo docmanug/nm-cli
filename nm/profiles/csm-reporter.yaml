@@ -9,6 +9,7 @@ services:
       calls: 9188247163
       meetings: 8793493881
       cs_dashboard: 18404571977
+      tasks: 8793500112
 
     commands:
       - deals.list
@@ -19,6 +20,8 @@ services:
       - meetings.list
       - companies.get
       - companies.search
+      - tasks.today
+      - tasks.get
 
     column_maps:
       contacts:
@@ -92,6 +95,18 @@ services:
         jours_restants: numeric_mm1kmwec
         date_churn: date_mm1k2dvk
         churn_status: text_mm1kyh7c
+
+      tasks:
+        owner: person
+        status: status
+        task_type: color_mkpv6xgb
+        item_relation: board_relation_mkr4hv79
+        due_date: date4
+        description: long_text_mkpeyws0
+        sequence: color_mkr44303
+        resultat: color_mkr9madn
+        complete_date: date_mkr5djz2
+        nom: text_mkrhms2g
 
     people_ids:
       santiago: 43763993
