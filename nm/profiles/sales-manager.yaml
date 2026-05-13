@@ -12,6 +12,7 @@ services:
       fr_leads: 8379500363
       calls: 9188247163
       meetings: 8793493881
+      tasks: 8793500112
 
     commands:
       # Deals (read-only)
@@ -31,6 +32,9 @@ services:
       - calls.get
       # Meetings (read-only)
       - meetings.list
+      # Tasks (read-only)
+      - tasks.today
+      - tasks.get
 
     column_maps:
       abonnements:
@@ -151,6 +155,18 @@ services:
         start_date: date_mkpefnz4
         end_date: date_mkpeav6m
         duree: numeric_mkxjd0e1
+
+      tasks:
+        owner: person
+        status: status
+        task_type: color_mkpv6xgb
+        item_relation: board_relation_mkr4hv79
+        due_date: date4
+        description: long_text_mkpeyws0
+        sequence: color_mkr44303
+        resultat: color_mkr9madn
+        complete_date: date_mkr5djz2
+        nom: text_mkrhms2g
 
     people_ids:
       theo: 70103039
