@@ -172,7 +172,7 @@ services:
       yasmina: 37456201
       emmanuel: 3299630
       juliette: 4d88b171
-      laura: TO_FILL
+      laura: 6e318b33-39cb-44ea-9dc9-bc3e448d99be
 
   nextcall:
     commands:
@@ -207,7 +207,7 @@ services:
       yasmina: a6432a76-2c53-4ef7-bb14-bcb9deb1607b
       emmanuel: a6178af6-2e87-4a97-9315-d95aa3eb4231
       juliette: 4d88b171-ad39-42aa-be82-ee867c90bfb2
-      laura: TO_FILL
+      laura: 6e318b33-39cb-44ea-9dc9-bc3e448d99be
 
   supabase:
     commands:
