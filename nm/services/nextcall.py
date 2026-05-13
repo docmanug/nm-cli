@@ -105,19 +105,29 @@ class NextCallService:
         detail = self._call_tool("contacts_get", {"contactId": contact_id, "includeHistory": True})
         return format_contact(detail)
 
+    def _resolve_contact_id(self, phone: str) -> str:
+        """Resolve a phone number to a NextCall contact UUID."""
+        result = self._call_tool("contacts_search", {"query": phone})
+        contacts = result.get("contacts", result) if isinstance(result, dict) else result
+        if isinstance(contacts, list) and contacts:
+            return contacts[0].get("id", phone)
+        return phone
+
     def send_whatsapp(self, phone: str, message: str, max_length: int = None) -> str:
         if max_length and len(message) > max_length:
             return format_error(f"Message trop long ({len(message)} > {max_length} caracteres)")
+        contact_id = self._resolve_contact_id(phone)
         result = self._call_tool("whatsapp_send", {
-            "userId": self._user_id, "contactId": phone, "body": message,
+            "userId": self._user_id, "contactId": contact_id, "body": message,
         })
         return format_send_confirmation("WhatsApp", phone, result.get("status", "envoye"))
 
     def send_sms(self, phone: str, message: str, max_length: int = None) -> str:
         if max_length and len(message) > max_length:
             return format_error(f"Message trop long ({len(message)} > {max_length} caracteres)")
+        contact_id = self._resolve_contact_id(phone)
         result = self._call_tool("sms_send", {
-            "userId": self._user_id, "contactId": phone, "body": message,
+            "userId": self._user_id, "contactId": contact_id, "body": message,
         })
         return format_send_confirmation("SMS", phone, result.get("status", "envoye"))
 
