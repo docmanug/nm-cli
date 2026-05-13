@@ -72,9 +72,9 @@ def handle_evolution(command: str, args: list, profile) -> str:
     if command == "instances.list":
         return svc.list_instances()
 
-    elif command == "send":
+    elif command in ("send", "whatsapp.send"):
         if len(args) < 2:
-            return format_error('Usage: nm evolution send <phone> "message" [--instance name]')
+            return format_error('Usage: nm evolution whatsapp send <phone> "message" [--instance name]')
         phone = args[0]
         msg_parts = []
         for a in args[1:]:

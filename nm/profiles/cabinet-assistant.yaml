@@ -148,7 +148,7 @@ services:
     instance: "Emmanuel"
     commands:
       - instances.list
-      - send
+      - whatsapp.send
 
   elevenlabs:
     commands:
