@@ -144,6 +144,12 @@ services:
       - feature.list
       - user.me
 
+  evolution:
+    instance: "Martine"
+    commands:
+      - instances.list
+      - send
+
   elevenlabs:
     commands:
       - call.trigger

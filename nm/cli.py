@@ -128,6 +128,9 @@ register_service("knowledge", handle_knowledge)
 from nm.services.mailerlite import handle_mailerlite
 register_service("mailerlite", handle_mailerlite)
 
+from nm.services.evolution import handle_evolution
+register_service("evolution", handle_evolution)
+
 try:
     from nm.services.enrich import handle_enrich
     register_service("enrich", handle_enrich)
