@@ -145,7 +145,7 @@ services:
       - user.me
 
   evolution:
-    instance: "Martine"
+    instance: "Emmanuel"
     commands:
       - instances.list
       - send
