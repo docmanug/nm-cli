@@ -993,23 +993,40 @@ class MondayService:
 
     # --- TASKS ---
 
-    def tasks_today(self) -> str:
-        items = self._list_items("tasks", limit=100)
+    def tasks_today(self, user: str | None = None) -> str:
+        items = self._list_items("tasks", limit=200, paginate_all=True)
         today_str = date.today().isoformat()
+        # Resolve person ID for --user filter
+        target_owner_id = None
+        if user:
+            people_ids = self._config.get("people_ids", {})
+            target_owner_id = people_ids.get(user)
+        owner_col = self._col("tasks", "owner")
         tasks = []
         for item in items:
             cols = self._parse_columns(item["column_values"])
             status = cols.get(self._col("tasks", "status"), "")
             due = cols.get(self._col("tasks", "due_date"), "")
-            if status in ("To Do", "Working on it", "") and due and due <= today_str:
-                tasks.append({
-                    "id": item["id"],
-                    "name": item["name"],
-                    "type": cols.get(self._col("tasks", "task_type"), "N/A"),
-                    "due_date": due,
-                    "description": cols.get(self._col("tasks", "description"), ""),
-                    "phone": cols.get(self._col("tasks", "telephone"), "N/A"),
-                })
+            # Filter: not done, due today or overdue
+            if status in ("Done", "Stuck"):
+                continue
+            if not due or due > today_str:
+                continue
+            # Filter by owner if --user specified
+            if target_owner_id:
+                person_ids = self._person_ids_in_column(cols, owner_col)
+                if target_owner_id not in person_ids:
+                    continue
+            tasks.append({
+                "id": item["id"],
+                "name": item["name"],
+                "type": cols.get(self._col("tasks", "task_type"), "N/A"),
+                "due_date": due,
+                "description": cols.get(self._col("tasks", "description"), ""),
+                "phone": cols.get(self._col("tasks", "telephone"), "N/A"),
+            })
+        # Sort by due date (most recent first)
+        tasks.sort(key=lambda t: t["due_date"], reverse=True)
         return format_tasks_list(tasks)
 
     def tasks_get(self, item_id: str) -> str:
@@ -1363,7 +1380,8 @@ def handle_monday(command: str, args: list, profile) -> str:
 
     # --- TASKS ---
     elif command == "tasks.today":
-        return svc.tasks_today()
+        user = get_flag("user") or get_flag("owner")
+        return svc.tasks_today(user=user)
 
     elif command == "tasks.get":
         if not args:
