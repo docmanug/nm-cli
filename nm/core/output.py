@@ -670,6 +670,159 @@ def format_nm_chat_contacts_list(contacts: list) -> str:
     return "\n".join(lines)
 
 
+def format_nm_patient_stats(data: dict) -> str:
+    if not data or not isinstance(data, dict):
+        return "Aucune statistique patient."
+    lines = ["Statistiques patient :"]
+    for key, val in data.items():
+        if isinstance(val, (str, int, float, bool)):
+            lines.append(f"  {key}: {val}")
+    return "\n".join(lines)
+
+
+def format_nm_treatments_list(items: list) -> str:
+    if not items:
+        return "Aucun traitement."
+    lines = [f"{len(items)} traitements :\n"]
+    for i, t in enumerate(items, 1):
+        name = t.get("name", t.get("treatment_type_name", "?"))
+        date = t.get("created_time", "?")[:10] if t.get("created_time") else "?"
+        price = t.get("price", "")
+        lines.append(f"#{i} {name} | {date} | {price} | ID: {t.get('id', '?')}")
+    return "\n".join(lines)
+
+
+def format_nm_prescriptions_list(items: list) -> str:
+    if not items:
+        return "Aucune ordonnance."
+    lines = [f"{len(items)} ordonnances :\n"]
+    for i, p in enumerate(items, 1):
+        name = p.get("name", "?")
+        date = p.get("created_time", "?")[:10] if p.get("created_time") else "?"
+        signed = "signe" if p.get("is_signed") else "non signe"
+        lines.append(f"#{i} {name} | {date} | {signed} | ID: {p.get('id', '?')}")
+    return "\n".join(lines)
+
+
+def format_nm_treatment(t: dict) -> str:
+    lines = [
+        f"Traitement #{t.get('id', '?')}",
+        f"  Nom: {t.get('name', t.get('treatment_type_name', 'N/A'))}",
+        f"  Prix: {t.get('price', 'N/A')}",
+        f"  Quantite: {t.get('quantity', 'N/A')}",
+        f"  Date: {str(t.get('created_time', ''))[:10]}",
+    ]
+    return "\n".join(lines)
+
+
+def format_nm_prescription(p: dict) -> str:
+    signed = "signe" if p.get("is_signed") else "non signe"
+    lines = [
+        f"Ordonnance #{p.get('id', '?')}",
+        f"  Nom: {p.get('name', 'N/A')}",
+        f"  Statut: {signed}",
+        f"  Date: {str(p.get('created_time', ''))[:10]}",
+    ]
+    return "\n".join(lines)
+
+
+def format_nm_media_list(items: list) -> str:
+    if not items:
+        return "Aucun media."
+    lines = [f"{len(items)} medias :\n"]
+    for i, m in enumerate(items, 1):
+        mtype = m.get("type", m.get("media_type", "?"))
+        date = m.get("created_time", "?")[:10] if m.get("created_time") else "?"
+        lines.append(f"#{i} {mtype} | {date} | ID: {m.get('id', '?')}")
+    return "\n".join(lines)
+
+
+def format_nm_consultation(c: dict) -> str:
+    lines = [
+        f"Consultation #{c.get('id', '?')}",
+        f"  Patient: {c.get('patient', 'N/A')}",
+        f"  Nom: {c.get('name', 'N/A')}",
+        f"  Cree: {str(c.get('created_time', ''))[:10]}",
+    ]
+    return "\n".join(lines)
+
+
+def format_nm_consultations_list(items: list) -> str:
+    if not items:
+        return "Aucune consultation."
+    lines = [f"{len(items)} consultations :\n"]
+    for i, c in enumerate(items, 1):
+        name = c.get("name", "?")
+        date = str(c.get("created_time", ""))[:10]
+        lines.append(f"#{i} {name} | {date} | Patient: {c.get('patient', '?')} | ID: {c.get('id', '?')}")
+    return "\n".join(lines)
+
+
+INVOICE_STATUS = {2: "NEW", 3: "VALIDATED", 4: "NEW_ONLY_DEPOSITS", 5: "NEW_ISSUED",
+                  6: "NEW_DEPOSITS_PAID", 9: "ONLY_DEPOSITS", 10: "ISSUED",
+                  11: "DEPOSITS_PAID", 12: "NEUTRALIZED"}
+
+
+def format_nm_invoice(inv: dict) -> str:
+    status_val = inv.get("status", "?")
+    status = INVOICE_STATUS.get(status_val, str(status_val)) if isinstance(status_val, int) else str(status_val)
+    patient = inv.get("patient", {})
+    patient_name = f"{patient.get('first_name', '')} {patient.get('last_name', '')}".strip() if isinstance(patient, dict) else str(patient)
+    lines = [
+        f"Facture #{inv.get('number_id', inv.get('id', '?'))}",
+        f"  ID: {inv.get('id', 'N/A')}",
+        f"  Titre: {inv.get('title', 'N/A')}",
+        f"  Statut: {status}",
+        f"  Patient: {patient_name or 'N/A'}",
+        f"  Date: {str(inv.get('invoiced_time', inv.get('created_time', '')))[:10]}",
+    ]
+    total = inv.get("sub_total_vat_excl_price", inv.get("total", ""))
+    if total:
+        lines.append(f"  Total HT: {total}")
+    treatments = inv.get("invoiced_treatments", [])
+    if isinstance(treatments, list) and treatments:
+        lines.append(f"  Actes ({len(treatments)}):")
+        for t in treatments[:5]:
+            lines.append(f"    - {t.get('name', '?')} x{t.get('quantity', 1)} = {t.get('price', '?')}")
+    return "\n".join(lines)
+
+
+def format_nm_invoices_list(items: list) -> str:
+    if not items:
+        return "Aucune facture."
+    lines = [f"{len(items)} factures :\n"]
+    for i, inv in enumerate(items, 1):
+        status_val = inv.get("status", "?")
+        status = INVOICE_STATUS.get(status_val, str(status_val)) if isinstance(status_val, int) else str(status_val)
+        title = inv.get("title", "?")
+        num = inv.get("number_id", "")
+        date = str(inv.get("invoiced_time", inv.get("created_time", "")))[:10]
+        lines.append(f"#{i} {num or '?'} | {title} | {status} | {date} | ID: {inv.get('id', '?')}")
+    return "\n".join(lines)
+
+
+def format_nm_payment(p: dict) -> str:
+    lines = [
+        f"Paiement #{p.get('id', '?')}",
+        f"  Montant: {p.get('amount', 'N/A')}",
+        f"  Methode: {p.get('payment_method', p.get('payment_medium', 'N/A'))}",
+        f"  Date: {str(p.get('created_time', ''))[:10]}",
+    ]
+    return "\n".join(lines)
+
+
+def format_nm_payments_list(items: list) -> str:
+    if not items:
+        return "Aucun paiement."
+    lines = [f"{len(items)} paiements :\n"]
+    for i, p in enumerate(items, 1):
+        amount = p.get("amount", "?")
+        method = p.get("payment_method", p.get("payment_medium", "?"))
+        date = str(p.get("created_time", ""))[:10]
+        lines.append(f"#{i} {amount} | {method} | {date} | ID: {p.get('id', '?')}")
+    return "\n".join(lines)
+
+
 def format_enrich_result(result: dict) -> str:
     lead_name = result.get("name", "?")
     item_id = result.get("item_id", "")
@@ -720,4 +873,102 @@ def format_enrich_status(status: dict) -> str:
         lines.append(f"  Rempli: {', '.join(filled)}")
     if empty:
         lines.append(f"  Vide: {', '.join(empty)}")
+    return "\n".join(lines)
+
+
+def format_nm_stats_income(data: dict) -> str:
+    if not data or not isinstance(data, dict):
+        return "Aucune statistique."
+    results = data.get("data", data.get("results", []))
+    if isinstance(results, list):
+        lines = ["Statistiques revenus :\n"]
+        for r in results:
+            period = r.get("period", r.get("label", "?"))
+            amount = r.get("amount", r.get("income", r.get("total", "?")))
+            lines.append(f"  {period}: {amount}")
+        return "\n".join(lines)
+    lines = ["Statistiques revenus :"]
+    for key, val in data.items():
+        if isinstance(val, (str, int, float)):
+            lines.append(f"  {key}: {val}")
+    return "\n".join(lines)
+
+
+def format_nm_visits_list(items: list) -> str:
+    if not items:
+        return "Aucune visite."
+    lines = [f"{len(items)} visites :\n"]
+    for i, v in enumerate(items, 1):
+        date = str(v.get("created_time", ""))[:10]
+        patient = v.get("patient", "?")
+        lines.append(f"#{i} {date} | Patient: {patient} | ID: {v.get('id', '?')}")
+    return "\n".join(lines)
+
+
+def format_nm_absences_list(items: list) -> str:
+    if not items:
+        return "Aucune absence."
+    lines = [f"{len(items)} absences :\n"]
+    for i, a in enumerate(items, 1):
+        event = a.get("calendar_event", {}) if isinstance(a.get("calendar_event"), dict) else {}
+        start = event.get("start_time", a.get("start_time", "?"))
+        end = event.get("end_time", a.get("end_time", "?"))
+        title = event.get("title", a.get("title", ""))
+        lines.append(f"#{i} {start} - {end} | {title} | ID: {a.get('id', '?')}")
+    return "\n".join(lines)
+
+
+def format_nm_journeys_list(items: list) -> str:
+    if not items:
+        return "Aucun parcours."
+    lines = [f"{len(items)} parcours :\n"]
+    for i, j in enumerate(items, 1):
+        name = j.get("name", j.get("title", "?"))
+        lines.append(f"#{i} {name} | ID: {j.get('id', '?')}")
+    return "\n".join(lines)
+
+
+def format_nm_generic_list(items: list, entity_name: str) -> str:
+    if not items:
+        return f"Aucun {entity_name}."
+    lines = [f"{len(items)} {entity_name}(s) :\n"]
+    for i, item in enumerate(items, 1):
+        name = item.get("name", item.get("subject", item.get("title", "?")))
+        lines.append(f"#{i} {name} | ID: {item.get('id', '?')}")
+    return "\n".join(lines)
+
+
+def format_nm_generic_detail(item: dict, entity_name: str) -> str:
+    if not item or not isinstance(item, dict):
+        return f"{entity_name} non trouve."
+    lines = [f"{entity_name} #{item.get('id', '?')}"]
+    for key in ("name", "subject", "title", "description", "price", "quantity",
+                "enabled", "active", "created_time", "modified_time"):
+        val = item.get(key)
+        if val is not None and val != "":
+            display_val = str(val)[:10] if "time" in key and isinstance(val, str) else val
+            lines.append(f"  {key}: {display_val}")
+    return "\n".join(lines)
+
+
+def format_nm_products_list(items: list) -> str:
+    if not items:
+        return "Aucun produit."
+    lines = [f"{len(items)} produits :\n"]
+    for i, p in enumerate(items, 1):
+        name = p.get("name", "?")
+        price = p.get("price", "")
+        lines.append(f"#{i} {name} | {price} | ID: {p.get('id', '?')}")
+    return "\n".join(lines)
+
+
+def format_nm_webhooks_list(items: list) -> str:
+    if not items:
+        return "Aucun webhook."
+    lines = [f"{len(items)} webhooks :\n"]
+    for i, w in enumerate(items, 1):
+        url = w.get("url", "?")
+        events = ", ".join(w.get("events", [])) if isinstance(w.get("events"), list) else str(w.get("events", ""))
+        active = "actif" if w.get("active", w.get("enabled", True)) else "inactif"
+        lines.append(f"#{i} {url} | {events} | {active} | ID: {w.get('id', '?')}")
     return "\n".join(lines)

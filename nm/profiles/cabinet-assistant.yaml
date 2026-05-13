@@ -66,6 +66,12 @@ services:
       - patient.get
       - patient.create
       - patient.update
+      - patient.stats
+      - patient.medical-history
+      - patient.treatments
+      - patient.prescriptions
+      - patient.media
+      - patient.photos
       # RDV (agenda Nextmotion)
       - rdv.list
       - rdv.get
@@ -73,6 +79,10 @@ services:
       - rdv.delete
       - rdv.reschedule
       - rdv.request
+      - rdv.treatments
+      # Absences & parcours
+      - absences.list
+      - journeys.list
       # Log appels
       - call.log
       # Leads
@@ -81,10 +91,34 @@ services:
       - lead.create
       - lead.update
       - lead.convert
+      # Consultations
+      - consultation.list
+      - consultation.get
+      - consultation.create
       # Devis
       - quote.list
       - quote.get
       - quote.update-followup
+      - quote.validate
+      # Factures
+      - invoice.list
+      - invoice.get
+      - invoice.create
+      - invoice.validate
+      - invoice.pay
+      # Paiements
+      - payment.list
+      - payment.get
+      # Traitements & ordonnances
+      - treatment.get
+      - treatment.create
+      - prescription.get
+      - prescription.create
+      - prescription.sign
+      # Visites
+      - visit.list
+      - visit.get
+      - visit.create
       # Chat
       - chat.contacts
       - chat.send
@@ -94,8 +128,20 @@ services:
       - visit-types.list
       - slots.list
       - find-slots
+      - sub-visit-type.list
       # Praticiens
       - doctor.list
+      - doctor.get
+      # Stats
+      - stats.income
+      - stats.treatments
+      - stats.treatments-income
+      # Config
+      - room.list
+      - device.list
+      - payment-medium.list
+      - feature.list
+      - user.me
 
   elevenlabs:
     commands:
