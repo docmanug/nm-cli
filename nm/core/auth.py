@@ -64,6 +64,11 @@ SERVICE_CREDENTIALS = {
         ("NEXTMOTION_API_URL", "api_url", True),
         ("NEXTMOTION_ACCESS_TOKEN", "access_token", True),
     ],
+    "twilio": [
+        ("TWILIO_ACCOUNT_SID", "account_sid", True),
+        ("TWILIO_AUTH_TOKEN", "auth_token", True),
+        ("TWILIO_PHONE_NUMBER", "from_number", False),
+    ],
     "evolution": [
         ("EVOLUTION_API_KEY", "api_key", True),
         ("EVOLUTION_API_URL", "api_url", True),

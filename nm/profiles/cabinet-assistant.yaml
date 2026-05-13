@@ -144,6 +144,16 @@ services:
       - feature.list
       - user.me
 
+  email:
+    account: "cabinet"
+    commands:
+      - send
+
+  twilio:
+    from_number: "+33939245614"
+    commands:
+      - sms.send
+
   evolution:
     instance: "Emmanuel"
     commands:

@@ -131,6 +131,12 @@ register_service("mailerlite", handle_mailerlite)
 from nm.services.evolution import handle_evolution
 register_service("evolution", handle_evolution)
 
+from nm.services.twilio_sms import handle_twilio
+register_service("twilio", handle_twilio)
+
+from nm.services.email import handle_email
+register_service("email", handle_email)
+
 try:
     from nm.services.enrich import handle_enrich
     register_service("enrich", handle_enrich)

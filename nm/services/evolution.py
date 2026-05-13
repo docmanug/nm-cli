@@ -34,8 +34,11 @@ class EvolutionService:
         inst = instance or self._instance
         if not inst:
             return format_error("Instance Evolution API requise (--instance ou config)")
-        # Normalize phone: remove +, ensure country code
-        number = phone.replace("+", "").replace(" ", "").replace("-", "")
+        # Normalize phone: ensure international format without +
+        number = phone.strip().replace(" ", "").replace("-", "")
+        if number.startswith("0") and len(number) == 10:
+            number = "33" + number[1:]
+        number = number.replace("+", "")
         resp = requests.post(
             f"{self._base}/message/sendText/{inst}",
             headers=self._headers(),
