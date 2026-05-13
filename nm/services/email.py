@@ -30,8 +30,10 @@ def handle_email(command: str, args: list, profile) -> str:
         if not body:
             return format_error("--body requis")
 
-        # Build raw email
-        raw = f"From: {account}\nTo: {to}\nSubject: {subject}\n\n{body}"
+        # Build raw email — himalaya uses the account config for the sender,
+        # but we still need a valid From header in the raw message
+        # Use template to let himalaya fill in the From field
+        raw = f"To: {to}\nSubject: {subject}\n\n{body}"
 
         try:
             result = subprocess.run(
