@@ -30,10 +30,17 @@ def handle_email(command: str, args: list, profile) -> str:
         if not body:
             return format_error("--body requis")
 
-        # Build raw email — himalaya uses the account config for the sender,
-        # but we still need a valid From header in the raw message
-        # Use template to let himalaya fill in the From field
-        raw = f"To: {to}\nSubject: {subject}\n\n{body}"
+        # Map account alias to email address
+        account_emails = {
+            "cabinet": "contact@medecine-esthetique.net",
+            "gmail": "emmanuel.elard@gmail.com",
+            "ia-esthetique": "contact@ia-esthetique.fr",
+            "emmanuel-nextmotion": "emmanuel@nextmotion.net",
+            "team-nextmotion": "team@nextmotion.net",
+            "contact-nextmotion": "contact@nextmotion.net",
+        }
+        from_email = account_emails.get(account, account)
+        raw = f"From: {from_email}\nTo: {to}\nSubject: {subject}\n\n{body}"
 
         try:
             result = subprocess.run(
