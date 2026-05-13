@@ -14,8 +14,13 @@ def handle_email(command: str, args: list, profile) -> str:
                 return args[i + 1]
         return None
 
-    if command == "send":
-        to = get_flag("to") or (args[0] if args and not args[0].startswith("--") else None)
+    if command == "send" or command.startswith("send."):
+        # Handle case where CLI joins "send" + "email@x.com" into "send.email@x.com"
+        to = get_flag("to")
+        if not to and command.startswith("send."):
+            to = command.split(".", 1)[1]
+        if not to:
+            to = args[0] if args and not args[0].startswith("--") else None
         subject = get_flag("subject") or "Sans objet"
         body = get_flag("body") or ""
         account = get_flag("account") or default_account
