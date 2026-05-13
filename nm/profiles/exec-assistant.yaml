@@ -25,6 +25,11 @@ services:
         - Contrat pas encore signé
         - Paiement en attente
 
+  email:
+    account: "gmail"
+    commands:
+      - send
+
   nextcall:
     commands:
       # Calendar (read-only)
