@@ -122,6 +122,7 @@ services:
       # Chat
       - chat.contacts
       - chat.send
+      - chat.send-by-phone
       # Labels
       - labels.list
       # Creneaux & types de visite

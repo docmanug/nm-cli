@@ -540,6 +540,26 @@ class NextmotionService:
         self._post("contact_messages", data)
         return format_send_confirmation(f"Chat NM ({system})", contact_id, "envoye")
 
+    def chat_send_by_phone(self, phone: str, message: str,
+                           system: str = "whatsapp") -> str:
+        """Resolve phone → NM chat contact, then send. Tracked in patient file."""
+        result = self._get(f"clinics/{self._clinic_id}/chat_contacts",
+                           {"search": phone, "user_type": 2})
+        contacts = result.get("data", result.get("results", []))
+        if not isinstance(contacts, list) or not contacts:
+            return format_error(
+                f"Aucun contact NM trouve pour {phone}. "
+                f"Le patient doit d'abord etre cree dans Nextmotion."
+            )
+        contact_id = contacts[0].get("id", "")
+        contact_name = (
+            f"{contacts[0].get('first_name', '')} {contacts[0].get('last_name', '')}".strip()
+            or phone
+        )
+        if not contact_id:
+            return format_error("Contact sans ID")
+        return self.chat_send(contact_id, message, system=system)
+
     # ---- LABELS ----
 
     def labels_list(self, label_type: str | None = None) -> str:
@@ -1753,6 +1773,19 @@ def handle_nextmotion(command: str, args: list, profile) -> str:
         message = " ".join(msg_parts)
         channel = get_flag("channel") or "whatsapp"
         return svc.chat_send(contact_id, message, system=channel)
+
+    elif command == "chat.send-by-phone":
+        if len(args) < 2:
+            return format_error('Usage: nm nextmotion chat send-by-phone <phone> "message" [--channel whatsapp|sms]')
+        phone = args[0]
+        msg_parts = []
+        for a in args[1:]:
+            if a.startswith("--"):
+                break
+            msg_parts.append(a)
+        message = " ".join(msg_parts)
+        channel = get_flag("channel") or "whatsapp"
+        return svc.chat_send_by_phone(phone, message, system=channel)
 
     # ---- LABELS ----
     elif command == "labels.list":
