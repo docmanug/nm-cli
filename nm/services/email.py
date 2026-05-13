@@ -37,7 +37,7 @@ def handle_email(command: str, args: list, profile) -> str:
 
         try:
             result = subprocess.run(
-                ["himalaya", "message", "send", "-a", account],
+                ["himalaya", "template", "send", "-a", account],
                 input=raw,
                 capture_output=True,
                 text=True,
