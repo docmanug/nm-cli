@@ -1486,6 +1486,10 @@ def handle_nextmotion(command: str, args: list, profile) -> str:
             email=get_flag("email"),
             phone_number=get_flag("phone"),
             notes=get_flag("notes"),
+            source=get_flag("source"),
+            desired_treatment=get_flag("treatment"),
+            treatment_zone=get_flag("zone"),
+            status=get_flag("status"),
         )
 
     elif command == "lead.update":
