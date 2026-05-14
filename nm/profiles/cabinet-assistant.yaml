@@ -72,6 +72,7 @@ services:
       - patient.prescriptions
       - patient.media
       - patient.photos
+      - patient.delete
       # RDV (agenda Nextmotion)
       - rdv.list
       - rdv.get
