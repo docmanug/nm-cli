@@ -91,6 +91,7 @@ services:
       - lead.create
       - lead.update
       - lead.convert
+      - lead.delete
       # Consultations
       - consultation.list
       - consultation.get
