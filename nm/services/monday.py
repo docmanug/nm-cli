@@ -175,14 +175,14 @@ class MondayService:
             if cursor:
                 data = self._query(
                     '{ next_items_page(limit: %d, cursor: "%s") '
-                    '{ cursor items { id name column_values { id text value } } } }'
+                    '{ cursor items { id name created_at column_values { id text value } } } }'
                     % (page_size, cursor)
                 )
                 page = data["next_items_page"]
             else:
                 data = self._query(
                     '{ boards(ids: [%d]) { items_page(limit: %d%s) '
-                    '{ cursor items { id name column_values { id text value } } } } }'
+                    '{ cursor items { id name created_at column_values { id text value } } } } }'
                     % (bid, page_size, qp)
                 )
                 page = data["boards"][0]["items_page"]
@@ -577,17 +577,17 @@ class MondayService:
                         if (today - nsd_dt).days < stale_days:
                             continue  # not stale yet
 
-            # --since YYYY : keep deals with close_date >= YYYY-01-01 (or no close_date)
+            # --since YYYY : keep deals created in YYYY or later
             if since_year is not None:
                 from datetime import datetime
-                date_str = cols.get(close_col, "").strip()
-                if date_str:
+                created = item.get("created_at", "")
+                if created:
                     try:
-                        dt = datetime.strptime(date_str, "%Y-%m-%d").date()
-                        if dt.year < since_year:
+                        ct = datetime.fromisoformat(created.replace("Z", "+00:00"))
+                        if ct.year < since_year:
                             continue
-                    except ValueError:
-                        pass  # keep unparseable
+                    except (ValueError, TypeError):
+                        pass
 
             ns = cols.get(self._col(board_name, "next_step"), "")
             nsd = cols.get(self._col(board_name, "next_step_date"), "")
@@ -741,16 +741,16 @@ class MondayService:
                     if owner_filter_lower not in owner_text:
                         continue
 
-            # --since YYYY filter
+            # --since YYYY : keep deals created in YYYY or later
             if since_year is not None:
                 from datetime import datetime
-                date_str = cols.get(close_col, "").strip()
-                if date_str:
+                created = item.get("created_at", "")
+                if created:
                     try:
-                        dt = datetime.strptime(date_str, "%Y-%m-%d").date()
-                        if dt.year < since_year:
+                        ct = datetime.fromisoformat(created.replace("Z", "+00:00"))
+                        if ct.year < since_year:
                             continue
-                    except ValueError:
+                    except (ValueError, TypeError):
                         pass
 
             stage = cols.get(stage_col, "Unknown")
