@@ -1,17 +1,24 @@
 from __future__ import annotations
 
 
-def format_leads_list(leads: list) -> str:
+def format_leads_list(leads: list, display_limit: int = 25) -> str:
     if not leads:
         return "Aucun lead a contacter."
-    lines = [f"{len(leads)} leads a contacter aujourd'hui :\n"]
-    for i, lead in enumerate(leads, 1):
+    total = len(leads)
+    shown = leads[:display_limit]
+    header = f"{total} leads a contacter aujourd'hui"
+    if total > display_limit:
+        header += f" (affichage {display_limit} premiers)"
+    lines = [header + " :\n"]
+    for i, lead in enumerate(shown, 1):
         last = lead.get("last_contact") or "aucun"
         lines.append(
             f"#{i} {lead['name']} | Statut: {lead['status']} "
             f"| Depuis: {lead.get('days', '?')}j | Tel: {lead.get('phone', 'N/A')}"
         )
         lines.append(f"   Dernier contact: {last}")
+    if total > display_limit:
+        lines.append(f"\n... et {total - display_limit} autres. Utilise --limit {total} pour tout voir.")
     return "\n".join(lines)
 
 
@@ -129,11 +136,17 @@ def format_item_created(item_type: str, item_id, item_name: str) -> str:
     return f"{item_type} cree : #{item_id} — {item_name}"
 
 
-def format_deals_list(deals: list, board_name: str = "") -> str:
+def format_deals_list(deals: list, board_name: str = "",
+                      display_limit: int = 25) -> str:
     if not deals:
         return f"Aucun deal actif{' dans ' + board_name if board_name else ''}."
-    lines = [f"{len(deals)} deals{' dans ' + board_name if board_name else ''} :\n"]
-    for i, deal in enumerate(deals, 1):
+    total = len(deals)
+    shown = deals[:display_limit]
+    header = f"{total} deals{' dans ' + board_name if board_name else ''}"
+    if total > display_limit:
+        header += f" (affichage {display_limit} premiers)"
+    lines = [header + " :\n"]
+    for i, deal in enumerate(shown, 1):
         arr = deal.get("arr", "?")
         lines.append(
             f"#{i} {deal['name']} | Stage: {deal.get('stage', 'N/A')} "
@@ -148,6 +161,8 @@ def format_deals_list(deals: list, board_name: str = "") -> str:
             lines.append(f"   Next Step: {ns or 'VIDE'} | Date: {nsd or 'VIDE'}")
         else:
             lines.append(f"   ⚠ Next Step: MANQUANT")
+    if total > display_limit:
+        lines.append(f"\n... et {total - display_limit} autres. Utilise --limit {total} pour tout voir ou --count pour le total.")
     return "\n".join(lines)
 
 
@@ -190,16 +205,20 @@ def format_pipeline_summary(stages: dict, board_name: str = "",
 def format_company_detail(company: dict) -> str:
     lines = [
         f"{company['name']}",
+        f"  ID: {company.get('id', 'N/A')}",
         f"  Statut: {company.get('status', 'N/A')}",
-        f"  Tel: {company.get('phone', 'N/A')}",
-        f"  Ville: {company.get('city', 'N/A')}",
-        f"  Pays: {company.get('country', 'N/A')}",
         f"  CS: {company.get('cs', 'N/A')}",
-        f"  SA matching: {company.get('superadmin_matching', 'N/A')}",
+        f"  Owner: {company.get('company_owner', 'N/A')}",
+        f"  Tel: {company.get('phone', 'N/A')}",
+        f"  Adresse: {company.get('address', '')} {company.get('zip', '')} {company.get('city', 'N/A')} {company.get('country', 'N/A')}".strip(),
+        f"  Contacts: {company.get('contacts', 'N/A')}",
+        f"  Superadmin: {company.get('superadmin_matching', 'N/A')}",
     ]
-    contacts = company.get("contacts", [])
-    if contacts:
-        lines.append(f"  Contacts: {', '.join(contacts)}")
+    notes = company.get("notes", [])
+    if notes:
+        lines.append("  Notes:")
+        for note in notes[:3]:
+            lines.append(f"    - {(note or '')[:200]}")
     return "\n".join(lines)
 
 
