@@ -686,6 +686,11 @@ class MondayService:
         }
         return format_deal_detail(deal)
 
+    _TERMINAL_STAGES = {
+        "closed won", "closed lost", "churned", "in renewal", "renewed",
+        "deal won", "deal lost", "deal unqualified",
+    }
+
     def deals_pipeline(self, board_name: str,
                        owner_filter: str | None = None) -> str:
         items = self._list_items(board_name, limit=500, paginate_all=True)
@@ -700,9 +705,12 @@ class MondayService:
             if not target_owner_id:
                 owner_filter_lower = owner_filter.lower()
 
-        stages: dict = {}
-        total_arr = 0.0
-        count = 0
+        active_stages: dict = {}
+        terminal_stages: dict = {}
+        active_arr = 0.0
+        active_count = 0
+        terminal_count = 0
+        total_all = 0
         for item in items:
             cols = self._parse_columns(item["column_values"])
 
@@ -721,17 +729,34 @@ class MondayService:
                 arr = float(cols.get(arr_col, "0") or "0")
             except (ValueError, TypeError):
                 arr = 0.0
-            if stage not in stages:
-                stages[stage] = {"count": 0, "arr": 0.0}
-            stages[stage]["count"] += 1
-            stages[stage]["arr"] += arr
-            total_arr += arr
-            count += 1
+
+            total_all += 1
+            if stage.lower() in self._TERMINAL_STAGES:
+                if stage not in terminal_stages:
+                    terminal_stages[stage] = {"count": 0, "arr": 0.0}
+                terminal_stages[stage]["count"] += 1
+                terminal_stages[stage]["arr"] += arr
+                terminal_count += 1
+            else:
+                if stage not in active_stages:
+                    active_stages[stage] = {"count": 0, "arr": 0.0}
+                active_stages[stage]["count"] += 1
+                active_stages[stage]["arr"] += arr
+                active_arr += arr
+                active_count += 1
 
         label = self._board_label(board_name)
         if owner_filter:
             label += f" ({owner_filter})"
-        return format_pipeline_summary(stages, label, total_arr, count)
+
+        lines = [f"Pipeline {label} — {active_count} deals actifs | ARR actif: {active_arr:.0f} EUR\n"]
+        for stage, data in active_stages.items():
+            lines.append(f"  {stage}: {data['count']} deals | ARR: {data['arr']:.0f} EUR")
+        if terminal_stages:
+            lines.append(f"\nTerminal ({terminal_count} deals) :")
+            for stage, data in terminal_stages.items():
+                lines.append(f"  {stage}: {data['count']} deals | ARR: {data['arr']:.0f} EUR")
+        return "\n".join(lines)
 
     # --- COMPANIES ---
 
