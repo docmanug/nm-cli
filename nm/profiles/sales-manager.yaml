@@ -5,7 +5,6 @@ services:
   monday:
     boards:
       abonnements: 8379500369
-      renewal: 9299481671
       machine: 9299534048
       companies: 8379500364
       contacts: 8379500370
@@ -17,6 +16,7 @@ services:
     commands:
       # Deals (read-only)
       - deals.list
+      - deals.stats
       - deals.get
       - deals.pipeline
       # Companies (read-only)
@@ -57,27 +57,6 @@ services:
         next_step: long_text_mkqyrfj6
         next_step_date: date_mkqyq91x
 
-      renewal:
-        deal_stage: deal_renew_pipeline
-        contract_status: color_mkrt9g56
-        deal_arr: deal_arr_fina
-        deal_mrr: deal_mrrfi
-        deal_tcv: deal_tcv_fina
-        renewal_date: deal_close_date
-        contract_end_date: contract_end_date
-        payment_date: payment_date
-        terms: contract_terms
-        previous_deal: board_relation_mkrk7vr1
-        next_deal: board_relation_mksfdmmt
-        company: board_relation_mkpfb3a2
-        contacts: deal_contacts
-        deal_owner: deal_owner
-        cs: deal_cus_succ
-        churned: color_mkqwdnsx
-        upfront: color_mkr2fy4c
-        next_step: long_text_mkqyrfj6
-        next_step_date: date_mkqyq91x
-
       machine:
         deal_stage: deal_mach_pipeline
         deal_arr: deal_arr_fina
@@ -88,7 +67,11 @@ services:
         terms: contract_terms
         company: board_relation_mkpfb3a2
         contacts: deal_contacts
+        deal_owner: deal_owner
+        cs: deal_cus_succ
         churned: color_mkqwdnsx
+        next_step: long_text_mkqyrfj6
+        next_step_date: date_mkqyq91x
 
       companies:
         status: nm_lead_status
@@ -221,6 +204,9 @@ services:
       - sessions.summaries
       - messages.search
       - sessions.save
+      - arr.latest
+      - arr.trend
+      - arr.movements
 
   enrich:
     commands:
