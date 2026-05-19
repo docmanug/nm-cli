@@ -472,7 +472,8 @@ class MondayService:
                    filter_empty: str | None = None,
                    count_only: bool = False,
                    upcoming_days: int | None = None,
-                   stale_days: int | None = None) -> str:
+                   stale_days: int | None = None,
+                   since_year: int | None = None) -> str:
         bid = self._board_id(board_name)
         people_ids = self._config.get("people_ids", {})
 
@@ -575,6 +576,18 @@ class MondayService:
                     else:
                         if (today - nsd_dt).days < stale_days:
                             continue  # not stale yet
+
+            # --since YYYY : keep deals with close_date >= YYYY-01-01 (or no close_date)
+            if since_year is not None:
+                from datetime import datetime
+                date_str = cols.get(close_col, "").strip()
+                if date_str:
+                    try:
+                        dt = datetime.strptime(date_str, "%Y-%m-%d").date()
+                        if dt.year < since_year:
+                            continue
+                    except ValueError:
+                        pass  # keep unparseable
 
             ns = cols.get(self._col(board_name, "next_step"), "")
             nsd = cols.get(self._col(board_name, "next_step_date"), "")
@@ -692,10 +705,14 @@ class MondayService:
     }
 
     def deals_pipeline(self, board_name: str,
-                       owner_filter: str | None = None) -> str:
+                       owner_filter: str | None = None,
+                       since_year: int | None = None) -> str:
         items = self._list_items(board_name, limit=500, paginate_all=True)
         stage_col = self._deal_stage_col(board_name)
         arr_col = self._col(board_name, "deal_arr")
+        close_col = (self._col(board_name, "close_date")
+                     if board_name != "renewal"
+                     else self._col(board_name, "renewal_date"))
         owner_col = self._col(board_name, "deal_owner")
         people_ids = self._config.get("people_ids", {})
 
@@ -723,6 +740,18 @@ class MondayService:
                     owner_text = cols.get(owner_col, "").lower()
                     if owner_filter_lower not in owner_text:
                         continue
+
+            # --since YYYY filter
+            if since_year is not None:
+                from datetime import datetime
+                date_str = cols.get(close_col, "").strip()
+                if date_str:
+                    try:
+                        dt = datetime.strptime(date_str, "%Y-%m-%d").date()
+                        if dt.year < since_year:
+                            continue
+                    except ValueError:
+                        pass
 
             stage = cols.get(stage_col, "Unknown")
             try:
@@ -1481,12 +1510,15 @@ def handle_monday(command: str, args: list, profile) -> str:
         upcoming_days = int(upcoming_str) if upcoming_str else None
         stale_str = get_flag("stale")
         stale_days = int(stale_str) if stale_str else None
+        since_str = get_flag("since")
+        since_year = int(since_str) if since_str else None
         count_only = "--count" in args
         return svc.deals_list(board, group, owner, limit=limit,
                               filter_col=filter_col, filter_val=filter_val,
                               filter_empty=empty, count_only=count_only,
                               upcoming_days=upcoming_days,
-                              stale_days=stale_days)
+                              stale_days=stale_days,
+                              since_year=since_year)
 
     elif command == "deals.get":
         if not args:
@@ -1496,7 +1528,9 @@ def handle_monday(command: str, args: list, profile) -> str:
     elif command == "deals.pipeline":
         board = get_flag("board") or "abonnements"
         owner = get_flag("owner")
-        return svc.deals_pipeline(board, owner)
+        since_str = get_flag("since")
+        since_year = int(since_str) if since_str else None
+        return svc.deals_pipeline(board, owner, since_year=since_year)
 
     elif command == "deals.stats":
         board = get_flag("board") or "abonnements"
