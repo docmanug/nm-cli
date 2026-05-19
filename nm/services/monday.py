@@ -564,7 +564,7 @@ class MondayService:
             if stale_days is not None:
                 from datetime import datetime, timedelta
                 stage = cols.get(stage_col, "").lower()
-                if any(s in stage for s in ("closed won", "closed lost", "churned", "deal won", "deal lost", "renewed")):
+                if stage in self._TERMINAL_STAGES:
                     continue
                 nsd_val = cols.get(self._col(board_name, "next_step_date"), "").strip()
                 today = datetime.now().date()
