@@ -787,7 +787,195 @@ class MondayService:
                 lines.append(f"  {stage}: {data['count']} deals | ARR: {data['arr']:.0f} EUR")
         return "\n".join(lines)
 
+    # --- CONTACTS ---
+
+    def contacts_list(self, limit: int = 500,
+                      cs_filter: str | None = None,
+                      filter_col: str | None = None,
+                      filter_val: str | None = None,
+                      filter_empty: str | None = None,
+                      count_only: bool = False) -> str:
+        items = self._list_items("contacts", limit, paginate_all=True)
+        people_ids = self._config.get("people_ids", {})
+
+        contacts = []
+        for item in items:
+            cols = self._parse_columns(item["column_values"])
+
+            # Filter by CS
+            if cs_filter:
+                cs_text = cols.get(self._col("contacts", "cs"), "").lower()
+                if cs_filter.lower() not in cs_text:
+                    continue
+
+            # Generic filters
+            if filter_empty:
+                empty_col_id = self._col("contacts", filter_empty)
+                if cols.get(empty_col_id, "").strip():
+                    continue
+            if filter_col:
+                filter_col_id = self._col("contacts", filter_col)
+                col_val = cols.get(filter_col_id, "").strip().lower()
+                if filter_val:
+                    if filter_val.lower() not in col_val:
+                        continue
+                else:
+                    if not col_val:
+                        continue
+
+            contacts.append({
+                "id": item["id"],
+                "name": item["name"],
+                "status": cols.get(self._col("contacts", "status"), "N/A"),
+                "cs": cols.get(self._col("contacts", "cs"), "N/A"),
+                "company": cols.get(self._col("contacts", "company"), ""),
+                "email": cols.get(self._col("contacts", "email"), ""),
+                "phone": cols.get(self._col("contacts", "phone"), ""),
+            })
+
+        if count_only:
+            return f"{len(contacts)} contacts"
+
+        if not contacts:
+            return "Aucun contact trouve."
+        lines = [f"{len(contacts)} contacts :\n"]
+        for c in contacts:
+            line = f"#{c['id']} {c['name']} | Statut: {c['status']} | CS: {c['cs']}"
+            if c.get("company"):
+                line += f" | Company: {c['company']}"
+            if c.get("email"):
+                line += f" | {c['email']}"
+            lines.append(line)
+        return "\n".join(lines)
+
+    def contacts_get(self, item_id: str) -> str:
+        item = self._get_item(item_id)
+        cols = self._parse_columns(item["column_values"])
+        contact = {
+            "id": item["id"],
+            "name": item["name"],
+            "status": cols.get(self._col("contacts", "status"), "N/A"),
+            "cs": cols.get(self._col("contacts", "cs"), "N/A"),
+            "company": cols.get(self._col("contacts", "company"), ""),
+            "email": cols.get(self._col("contacts", "email"), ""),
+            "phone": cols.get(self._col("contacts", "phone"), ""),
+            "first_name": cols.get(self._col("contacts", "first_name"), ""),
+            "last_name": cols.get(self._col("contacts", "last_name"), ""),
+            "login_this_month": cols.get(self._col("contacts", "login_this_month"), ""),
+            "login_last_month": cols.get(self._col("contacts", "login_last_month"), ""),
+            "user_engagement": cols.get(self._col("contacts", "user_engagement"), ""),
+            "next_step": cols.get(self._col("contacts", "next_step"), ""),
+            "next_step_date": cols.get(self._col("contacts", "next_step_date"), ""),
+            "notes": [u["text_body"] for u in item.get("updates", [])],
+        }
+        lines = [
+            f"{contact['name']}",
+            f"  ID: {contact['id']}",
+            f"  Statut: {contact['status']}",
+            f"  CS: {contact['cs']}",
+            f"  Email: {contact['email']}",
+            f"  Tel: {contact['phone']}",
+            f"  Company: {contact['company']}",
+            f"  Login ce mois: {contact['login_this_month']}",
+            f"  Login mois dernier: {contact['login_last_month']}",
+            f"  Engagement: {contact['user_engagement']}",
+        ]
+        if contact["next_step"]:
+            lines.append(f"  Next step: {contact['next_step']}")
+        if contact["next_step_date"]:
+            lines.append(f"  Next step date: {contact['next_step_date']}")
+        notes = contact.get("notes", [])
+        if notes:
+            lines.append("  Notes:")
+            for note in notes[:3]:
+                lines.append(f"    - {(note or '')[:200]}")
+        return "\n".join(lines)
+
+    def contacts_update(self, item_id: str, column_values: dict) -> str:
+        mapped = {}
+        for key, value in column_values.items():
+            col_id = self._col("contacts", key)
+            mapped[col_id] = value
+        self._update_columns("contacts", item_id, mapped)
+        return f"Contact {item_id} mis a jour"
+
+    def contacts_search(self, query: str) -> str:
+        items = self._search_board("contacts", query)
+        if not items:
+            return f"Aucun contact trouve pour '{query}'"
+        lines = [f"{len(items)} contact(s) trouve(s) :\n"]
+        for item in items:
+            cols = self._parse_columns(item["column_values"])
+            line = (f"#{item['id']} {item['name']} "
+                    f"| Statut: {cols.get(self._col('contacts', 'status'), 'N/A')} "
+                    f"| CS: {cols.get(self._col('contacts', 'cs'), 'N/A')}")
+            company = cols.get(self._col("contacts", "company"), "")
+            if company:
+                line += f" | Company: {company}"
+            lines.append(line)
+        return "\n".join(lines)
+
     # --- COMPANIES ---
+
+    def companies_list(self, limit: int = 500,
+                       cs_filter: str | None = None,
+                       filter_col: str | None = None,
+                       filter_val: str | None = None,
+                       filter_empty: str | None = None,
+                       count_only: bool = False) -> str:
+        items = self._list_items("companies", limit, paginate_all=True)
+
+        companies = []
+        for item in items:
+            cols = self._parse_columns(item["column_values"])
+
+            # Filter by CS
+            if cs_filter:
+                cs_text = cols.get(self._col("companies", "cs"), "").lower()
+                if cs_filter.lower() not in cs_text:
+                    continue
+
+            # Generic filters
+            if filter_empty:
+                empty_col_id = self._col("companies", filter_empty)
+                if cols.get(empty_col_id, "").strip():
+                    continue
+            if filter_col:
+                filter_col_id = self._col("companies", filter_col)
+                col_val = cols.get(filter_col_id, "").strip().lower()
+                if filter_val:
+                    if filter_val.lower() not in col_val:
+                        continue
+                else:
+                    if not col_val:
+                        continue
+
+            companies.append({
+                "id": item["id"],
+                "name": item["name"],
+                "status": cols.get(self._col("companies", "status"), "N/A"),
+                "cs": cols.get(self._col("companies", "cs"), "N/A"),
+                "contacts": cols.get(self._col("companies", "contacts"), ""),
+                "company_owner": cols.get(self._col("companies", "company_owner"), ""),
+                "country": cols.get(self._col("companies", "country"), ""),
+            })
+
+        if count_only:
+            return f"{len(companies)} companies"
+
+        if not companies:
+            return "Aucune company trouvee."
+        lines = [f"{len(companies)} companies :\n"]
+        for c in companies:
+            line = f"#{c['id']} {c['name']} | Statut: {c['status']} | CS: {c['cs']}"
+            if c.get("company_owner"):
+                line += f" | Owner: {c['company_owner']}"
+            if c.get("country"):
+                line += f" | {c['country']}"
+            if c.get("contacts"):
+                line += f" | Contacts: {c['contacts']}"
+            lines.append(line)
+        return "\n".join(lines)
 
     def companies_get(self, item_id: str) -> str:
         item = self._get_item(item_id)
@@ -1536,7 +1724,49 @@ def handle_monday(command: str, args: list, profile) -> str:
         board = get_flag("board") or "abonnements"
         return svc.deals_stats(board)
 
+    # --- CONTACTS ---
+    elif command == "contacts.list":
+        cs = get_flag("cs")
+        filter_col = get_flag("filter")
+        filter_val = get_flag("value")
+        empty = get_flag("empty")
+        limit = int(get_flag("limit") or "500")
+        count_only = "--count" in args
+        return svc.contacts_list(limit=limit, cs_filter=cs,
+                                 filter_col=filter_col, filter_val=filter_val,
+                                 filter_empty=empty, count_only=count_only)
+
+    elif command == "contacts.get":
+        if not args:
+            return format_error("Usage: nm monday contacts get <item_id>")
+        return svc.contacts_get(args[0])
+
+    elif command == "contacts.update":
+        item_id = args[0] if args else None
+        if not item_id:
+            return format_error('Usage: nm monday contacts update <item_id> --key value')
+        flags = get_json_flags()
+        if not flags:
+            return format_error('Usage: nm monday contacts update <item_id> --key value')
+        return svc.contacts_update(item_id, flags)
+
+    elif command == "contacts.search":
+        if not args:
+            return format_error('Usage: nm monday contacts search "nom"')
+        return svc.contacts_search(" ".join([a for a in args if not a.startswith("--")]))
+
     # --- COMPANIES ---
+    elif command == "companies.list":
+        cs = get_flag("cs")
+        filter_col = get_flag("filter")
+        filter_val = get_flag("value")
+        empty = get_flag("empty")
+        limit = int(get_flag("limit") or "500")
+        count_only = "--count" in args
+        return svc.companies_list(limit=limit, cs_filter=cs,
+                                  filter_col=filter_col, filter_val=filter_val,
+                                  filter_empty=empty, count_only=count_only)
+
     elif command == "companies.get":
         if not args:
             return format_error("Usage: nm monday companies get <item_id>")
