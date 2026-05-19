@@ -43,11 +43,19 @@ class MondayService:
         maps = self._column_maps.get(board_name, {})
         return maps.get(field, field)
 
+    def _resolve_person_name(self, person_id: int) -> str:
+        """Resolve a Monday person ID to a name using people_ids config."""
+        people_ids = self._config.get("people_ids", {})
+        for name, pid in people_ids.items():
+            if int(pid) == int(person_id):
+                return name.capitalize()
+        return str(person_id)
+
     def _query(self, query: str, variables: dict | None = None) -> dict:
         payload = {"query": query}
         if variables:
             payload["variables"] = variables
-        resp = requests.post(MONDAY_API_URL, headers=self._headers, json=payload)
+        resp = requests.post(MONDAY_API_URL, headers=self._headers, json=payload, timeout=30)
         resp.raise_for_status()
         data = resp.json()
         if "errors" in data:
@@ -66,6 +74,37 @@ class MondayService:
                     val = json.loads(raw_value)
                     if isinstance(val, dict) and "phone" in val:
                         text = val["phone"]
+                except (json.JSONDecodeError, TypeError):
+                    pass
+            # Fallback: extract text from value JSON for column types
+            # where Monday returns empty text (people, status, color, date, link)
+            if not text and raw_value:
+                try:
+                    val = json.loads(raw_value)
+                    if isinstance(val, dict):
+                        # People columns
+                        if "personsAndTeams" in val:
+                            names = []
+                            for p in val["personsAndTeams"]:
+                                pid = p.get("id")
+                                if pid:
+                                    names.append(self._resolve_person_name(pid))
+                            if names:
+                                text = ", ".join(names)
+                        # Status/Color/Dropdown columns
+                        elif "label" in val:
+                            text = val["label"]
+                        # Date columns
+                        elif "date" in val:
+                            text = val["date"]
+                            if val.get("time"):
+                                text += f" {val['time']}"
+                        # Link columns
+                        elif "url" in val:
+                            text = val.get("text") or val["url"]
+                        # Checkbox columns
+                        elif "checked" in val:
+                            text = "Oui" if val["checked"] == "true" else ""
                 except (json.JSONDecodeError, TypeError):
                     pass
             result[col["id"]] = text
@@ -239,31 +278,82 @@ class MondayService:
         return "\n".join(lines)
 
     def generic_items_list(self, board_id: int, limit: int = 25,
-                           group_id: str = "") -> str:
-        """List items from any board by ID."""
+                           group_id: str = "",
+                           filter_col_id: str = "",
+                           filter_val: str = "",
+                           filter_empty: str = "",
+                           count_only: bool = False) -> str:
+        """List items from any board by ID with optional filtering."""
         if group_id:
             data = self._query(
                 '{ boards(ids: [%d]) { groups(ids: ["%s"]) { items_page(limit: %d) '
                 '{ items { id name column_values { id text } } } } } }'
-                % (board_id, group_id, limit)
+                % (board_id, group_id, min(limit, 100))
             )
             grps = data["boards"][0].get("groups", [])
             items = grps[0]["items_page"]["items"] if grps else []
         else:
-            data = self._query(
-                '{ boards(ids: [%d]) { items_page(limit: %d) '
-                '{ items { id name column_values { id text } } } } }'
-                % (board_id, limit)
-            )
-            items = data["boards"][0]["items_page"]["items"]
+            # Paginate to get all items up to limit
+            all_items = []
+            cursor = None
+            page_size = min(limit, 100)
+            while True:
+                if cursor:
+                    data = self._query(
+                        '{ next_items_page(limit: %d, cursor: "%s") '
+                        '{ cursor items { id name column_values { id text } } } }'
+                        % (page_size, cursor)
+                    )
+                    page = data["next_items_page"]
+                else:
+                    data = self._query(
+                        '{ boards(ids: [%d]) { items_page(limit: %d) '
+                        '{ cursor items { id name column_values { id text } } } } }'
+                        % (board_id, page_size)
+                    )
+                    page = data["boards"][0]["items_page"]
+                all_items.extend(page.get("items", []))
+                cursor = page.get("cursor")
+                if not cursor or len(all_items) >= limit:
+                    break
+            items = all_items[:limit]
 
         if not items:
             return f"Aucun item dans le board {board_id}."
-        lines = [f"{len(items)} items :\n"]
+
+        # Apply filters
+        filtered = []
         for item in items:
+            cols = self._parse_columns(item.get("column_values", []))
+            if filter_empty:
+                if cols.get(filter_empty, "").strip():
+                    continue
+            if filter_col_id:
+                col_val = cols.get(filter_col_id, "").strip().lower()
+                if filter_val:
+                    if filter_val.lower() not in col_val:
+                        continue
+                else:
+                    if not col_val:
+                        continue
+            filtered.append(item)
+
+        if count_only:
+            return f"{len(filtered)} items (sur {len(items)} total) dans board {board_id}"
+
+        display_limit = min(limit, 25)
+        shown = filtered[:display_limit]
+        total = len(filtered)
+        header = f"{total} items"
+        if total > display_limit:
+            header += f" (affichage {display_limit} premiers)"
+        lines = [header + " :\n"]
+        for item in shown:
             cols = self._parse_columns(item.get("column_values", []))
             status = cols.get("status", cols.get("color", ""))
             lines.append(f"  #{item['id']} {item['name']}" + (f" | {status}" if status else ""))
+        if total > display_limit:
+            lines.append(f"\n... et {total - display_limit} autres. Utilise --limit {total} pour tout voir ou --count pour le total.")
         return "\n".join(lines)
 
     def generic_item_create(self, board_id: int, item_name: str,
@@ -376,7 +466,12 @@ class MondayService:
 
     def deals_list(self, board_name: str, group: str | None = None,
                    owner_filter: str | None = None,
-                   limit: int = 500) -> str:
+                   limit: int = 500,
+                   filter_col: str | None = None,
+                   filter_val: str | None = None,
+                   filter_empty: str | None = None,
+                   count_only: bool = False,
+                   upcoming_days: int | None = None) -> str:
         bid = self._board_id(board_name)
         people_ids = self._config.get("people_ids", {})
 
@@ -433,6 +528,36 @@ class MondayService:
                     if owner_filter_lower not in owner_text:
                         continue
 
+            # Generic column filter (--filter <field> --value <val> or --empty <field>)
+            if filter_empty:
+                empty_col_id = self._col(board_name, filter_empty)
+                col_val = cols.get(empty_col_id, "").strip()
+                if col_val:  # skip non-empty
+                    continue
+            if filter_col:
+                filter_col_id = self._col(board_name, filter_col)
+                col_val = cols.get(filter_col_id, "").strip().lower()
+                if filter_val:
+                    if filter_val.lower() not in col_val:
+                        continue
+                else:
+                    if not col_val:  # no value specified = show non-empty
+                        continue
+
+            # --upcoming N : keep only deals with close/renewal date within N days
+            if upcoming_days is not None:
+                from datetime import datetime, timedelta
+                date_str = cols.get(close_col, "").strip()
+                if not date_str:
+                    continue
+                try:
+                    dt = datetime.strptime(date_str, "%Y-%m-%d").date()
+                except ValueError:
+                    continue
+                today = datetime.now().date()
+                if dt < today or dt > today + timedelta(days=upcoming_days):
+                    continue
+
             ns = cols.get(self._col(board_name, "next_step"), "")
             nsd = cols.get(self._col(board_name, "next_step_date"), "")
             deals.append({
@@ -445,7 +570,67 @@ class MondayService:
                 "next_step": ns,
                 "next_step_date": nsd,
             })
-        return format_deals_list(deals, self._board_label(board_name))
+        if count_only:
+            return f"{len(deals)} deals{' dans ' + self._board_label(board_name) if board_name else ''}" + (
+                f" (filtre: {filter_empty or filter_col})" if filter_empty or filter_col else ""
+            )
+        return format_deals_list(deals, self._board_label(board_name),
+                                display_limit=min(limit, 25))
+
+    def deals_stats(self, board_name: str) -> str:
+        """Aggregated stats for a deals board — one API call, minimal tokens."""
+        items = self._list_items(board_name, limit=500, paginate_all=True)
+        stage_col = self._deal_stage_col(board_name)
+        arr_col = self._col(board_name, "deal_arr")
+        owner_col = self._col(board_name, "deal_owner")
+        cs_col = self._column_maps.get(board_name, {}).get("cs") or None
+        ns_col = self._col(board_name, "next_step")
+
+        total_arr = 0
+        by_stage = {}
+        by_owner = {}
+        no_next_step = 0
+        no_cs = 0
+
+        for item in items:
+            cols = self._parse_columns(item["column_values"])
+            stage = cols.get(stage_col, "N/A")
+            try:
+                arr = float(cols.get(arr_col, "0").replace(",", ".").replace(" ", "") or "0")
+            except (ValueError, AttributeError):
+                arr = 0
+            owner = cols.get(owner_col, "").strip() or "Non assigne"
+
+            total_arr += arr
+            by_stage.setdefault(stage, {"count": 0, "arr": 0})
+            by_stage[stage]["count"] += 1
+            by_stage[stage]["arr"] += arr
+            by_owner.setdefault(owner, {"count": 0, "arr": 0})
+            by_owner[owner]["count"] += 1
+            by_owner[owner]["arr"] += arr
+
+            if not cols.get(ns_col, "").strip():
+                no_next_step += 1
+            if cs_col and not cols.get(cs_col, "").strip():
+                no_cs += 1
+
+        lines = [
+            f"Stats {self._board_label(board_name)} — {len(items)} deals, ARR total: {total_arr:,.0f} EUR\n",
+            "PAR STAGE :",
+        ]
+        for stage, data in sorted(by_stage.items(), key=lambda x: -x[1]["arr"]):
+            lines.append(f"  {stage}: {data['count']} deals, {data['arr']:,.0f} EUR")
+
+        lines.append("\nPAR OWNER :")
+        for owner, data in sorted(by_owner.items(), key=lambda x: -x[1]["arr"]):
+            lines.append(f"  {owner}: {data['count']} deals, {data['arr']:,.0f} EUR")
+
+        lines.append(f"\nALERTES :")
+        lines.append(f"  Sans next step: {no_next_step}/{len(items)}")
+        if cs_col:
+            lines.append(f"  Sans CS assigne: {no_cs}/{len(items)}")
+
+        return "\n".join(lines)
 
     def deals_get(self, item_id: str) -> str:
         item = self._get_item(item_id)
@@ -540,10 +725,15 @@ class MondayService:
             "name": item["name"],
             "status": cols.get(self._col("companies", "status"), "N/A"),
             "phone": cols.get(self._col("companies", "phone"), "N/A"),
+            "address": cols.get(self._col("companies", "address"), ""),
             "city": cols.get(self._col("companies", "city"), "N/A"),
             "country": cols.get(self._col("companies", "country"), "N/A"),
+            "zip": cols.get(self._col("companies", "zip"), ""),
             "cs": cols.get(self._col("companies", "cs"), "N/A"),
+            "contacts": cols.get(self._col("companies", "contacts"), ""),
+            "company_owner": cols.get(self._col("companies", "company_owner"), ""),
             "superadmin_matching": cols.get(self._col("companies", "superadmin_matching"), "N/A"),
+            "notes": [u["text_body"] for u in item.get("updates", [])],
         }
         return format_company_detail(company)
 
@@ -664,13 +854,10 @@ class MondayService:
             # Filter by owner (people column)
             if owner_filter:
                 sdr_col = self._col("calls", "sdr")
-                target_id = str(people_ids.get(owner_filter, ""))
+                target_id = people_ids.get(owner_filter)
                 if target_id:
-                    sdr_value = next(
-                        (c.get("value", "") for c in item["column_values"]
-                         if c["id"] == sdr_col), ""
-                    )
-                    if target_id not in str(sdr_value):
+                    person_ids = self._person_ids_in_column(cols, sdr_col)
+                    if int(target_id) not in person_ids:
                         continue
 
             calls.append({
@@ -713,13 +900,10 @@ class MondayService:
             # Filter by owner (people column)
             if owner_filter:
                 people_col = self._col("meetings", "people")
-                target_id = str(people_ids.get(owner_filter, ""))
+                target_id = people_ids.get(owner_filter)
                 if target_id:
-                    people_value = next(
-                        (c.get("value", "") for c in item["column_values"]
-                         if c["id"] == people_col), ""
-                    )
-                    if target_id not in str(people_value):
+                    person_ids = self._person_ids_in_column(cols, people_col)
+                    if int(target_id) not in person_ids:
                         continue
 
             meetings.append({
@@ -745,7 +929,7 @@ class MondayService:
         return "fr_leads"
 
     def leads_list(self, board_name: str = "fr_leads") -> str:
-        items = self._list_items(board_name)
+        items = self._list_items(board_name, limit=500, paginate_all=True)
         if not items:
             return format_leads_list([])
 
@@ -770,7 +954,7 @@ class MondayService:
                 "phone": cols.get(self._col(board_name, "phone"), "N/A"),
                 "last_contact": lc or None,
             })
-        return format_leads_list(leads)
+        return format_leads_list(leads, display_limit=25)
 
     def leads_get(self, item_id: str) -> str:
         item = self._get_item(item_id)
@@ -1178,10 +1362,21 @@ def handle_monday(command: str, args: list, profile) -> str:
     elif command == "board.items":
         board_id = args[0] if args else get_flag("board")
         if not board_id:
-            return format_error("Usage: nm monday board items <board_id> [--group <group_id>] [--limit 25]")
-        limit = int(get_flag("limit") or "25")
+            return format_error(
+                "Usage: nm monday board items <board_id> [--group <group_id>] [--limit 25] "
+                "[--empty <col_id>] [--filter <col_id> --value <text>] [--count]"
+            )
+        limit = int(get_flag("limit") or "500")
         group_id = get_flag("group") or ""
-        return svc.generic_items_list(int(board_id), limit, group_id)
+        filter_col = get_flag("filter") or ""
+        filter_val = get_flag("value") or ""
+        filter_empty = get_flag("empty") or ""
+        count_only = "--count" in args
+        return svc.generic_items_list(
+            int(board_id), limit, group_id,
+            filter_col_id=filter_col, filter_val=filter_val,
+            filter_empty=filter_empty, count_only=count_only,
+        )
 
     elif command == "board.create-item":
         board_id = get_flag("board")
@@ -1235,7 +1430,17 @@ def handle_monday(command: str, args: list, profile) -> str:
         board = get_flag("board") or "abonnements"
         group = get_flag("group")
         owner = get_flag("owner")
-        return svc.deals_list(board, group, owner)
+        filter_col = get_flag("filter")
+        filter_val = get_flag("value")
+        empty = get_flag("empty")
+        limit = int(get_flag("limit") or "500")
+        upcoming_str = get_flag("upcoming")
+        upcoming_days = int(upcoming_str) if upcoming_str else None
+        count_only = "--count" in args
+        return svc.deals_list(board, group, owner, limit=limit,
+                              filter_col=filter_col, filter_val=filter_val,
+                              filter_empty=empty, count_only=count_only,
+                              upcoming_days=upcoming_days)
 
     elif command == "deals.get":
         if not args:
@@ -1246,6 +1451,10 @@ def handle_monday(command: str, args: list, profile) -> str:
         board = get_flag("board") or "abonnements"
         owner = get_flag("owner")
         return svc.deals_pipeline(board, owner)
+
+    elif command == "deals.stats":
+        board = get_flag("board") or "abonnements"
+        return svc.deals_stats(board)
 
     # --- COMPANIES ---
     elif command == "companies.get":
