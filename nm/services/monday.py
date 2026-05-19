@@ -471,7 +471,8 @@ class MondayService:
                    filter_val: str | None = None,
                    filter_empty: str | None = None,
                    count_only: bool = False,
-                   upcoming_days: int | None = None) -> str:
+                   upcoming_days: int | None = None,
+                   stale_days: int | None = None) -> str:
         bid = self._board_id(board_name)
         people_ids = self._config.get("people_ids", {})
 
@@ -557,6 +558,23 @@ class MondayService:
                 today = datetime.now().date()
                 if dt < today or dt > today + timedelta(days=upcoming_days):
                     continue
+
+            # --stale N : keep deals with next_step_date overdue by N+ days or missing
+            if stale_days is not None:
+                from datetime import datetime, timedelta
+                stage = cols.get(stage_col, "").lower()
+                if any(s in stage for s in ("closed won", "closed lost", "churned", "deal won", "deal lost", "renewed")):
+                    continue
+                nsd_val = cols.get(self._col(board_name, "next_step_date"), "").strip()
+                today = datetime.now().date()
+                if nsd_val:
+                    try:
+                        nsd_dt = datetime.strptime(nsd_val, "%Y-%m-%d").date()
+                    except ValueError:
+                        pass  # keep deals with unparseable dates
+                    else:
+                        if (today - nsd_dt).days < stale_days:
+                            continue  # not stale yet
 
             ns = cols.get(self._col(board_name, "next_step"), "")
             nsd = cols.get(self._col(board_name, "next_step_date"), "")
@@ -1436,11 +1454,14 @@ def handle_monday(command: str, args: list, profile) -> str:
         limit = int(get_flag("limit") or "500")
         upcoming_str = get_flag("upcoming")
         upcoming_days = int(upcoming_str) if upcoming_str else None
+        stale_str = get_flag("stale")
+        stale_days = int(stale_str) if stale_str else None
         count_only = "--count" in args
         return svc.deals_list(board, group, owner, limit=limit,
                               filter_col=filter_col, filter_val=filter_val,
                               filter_empty=empty, count_only=count_only,
-                              upcoming_days=upcoming_days)
+                              upcoming_days=upcoming_days,
+                              stale_days=stale_days)
 
     elif command == "deals.get":
         if not args:
